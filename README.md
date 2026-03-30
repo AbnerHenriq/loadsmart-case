@@ -50,12 +50,14 @@ loadsmart_case/
 ├── notebooks/
 │   └── loadsmart_analysis.ipynb
 ├── docs/
-│   ├── raw_data_findings.md
+│   ├── analysis/
+│   │   └── raw-data-findings.md
 │   └── runbooks/
-│       ├── superset_dashboards.md
-│       ├── superset_metrics.md
-│       ├── superset_datasets.md
-│       └── superset_connections.md
+│       ├── rbk001-superset-connections.md
+│       ├── rbk002-superset-datasets.md
+│       ├── rbk003-superset-metrics.md
+│       ├── rbk004-superset-dashboards.md
+│       └── rbk005-create-dashboard.md
 ├── .env
 └── requirements.txt
 ```
@@ -390,7 +392,7 @@ Tudo configurado automaticamente pelo `superset_bootstrap.py` durante o `make se
 ## Qualidade dos dados
 
 Os achados de qualidade encontrados na camada raw estão documentados em
-[docs/raw_data_findings.md](docs/raw_data_findings.md).
+[docs/analysis/raw-data-findings.md](docs/analysis/raw-data-findings.md).
 
 Resumo dos principais pontos:
 

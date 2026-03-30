@@ -12,7 +12,7 @@ Este runbook documenta o padrão descoberto empiricamente na versão **6.0.1** d
 ## Pré-requisitos
 
 - Superset rodando em `http://localhost:8088`
-- Dataset já criado (ver `superset_dashboards.md`)
+- Dataset já criado (ver `rbk004-superset-dashboards.md`)
 - Python com `requests` instalado
 
 ---

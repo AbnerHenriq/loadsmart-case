@@ -118,7 +118,13 @@ models:
 
       # ── Surrogate keys (additional) ─────────────────────────────────────────
       - name: booked_date_sk
-        description: "FK to dim_date (booking date)"
+        description: "FK to dim_date (booking date). Nullable when booked_at is missing."
+        tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
 
       - name: book_price
         description: "Price charged to the shipper (USD). May be ≤ 0 for cancelled loads."
@@ -158,57 +164,110 @@ models:
       # ── Performance flags (boolean) ──────────────────────────────────────────
       - name: is_profitable
         description: "True when pnl > 0."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: is_mileage_valid
         description: "True when mileage > 0. Used to filter cost-per-mile metrics."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: delivered_on_time
         description: "Overall on-time delivery flag from the shipper perspective."
+        tests:
+          - accepted_values:
+              values: [true, false]
+              config:
+                severity: warn
 
       # ── On-time SLA flags (carrier perspective) ──────────────────────────────
       - name: carrier_on_time_to_pickup
         description: >
           True when the carrier arrived at the pickup location on or before the
           scheduled pickup appointment. Source of on_time_pickup_rate metric.
+        tests:
+          - accepted_values:
+              values: [true, false]
+              config:
+                severity: warn
 
       - name: carrier_on_time_to_delivery
         description: >
           True when the carrier completed delivery on or before the scheduled
           delivery appointment. Source of on_time_delivery_rate metric.
+        tests:
+          - accepted_values:
+              values: [true, false]
+              config:
+                severity: warn
 
       - name: carrier_on_time_overall
         description: >
           True when both pickup and delivery were on time. Primary SLA flag used
           in the SLA e Pontualidade por Lane dashboard. Source of on_time_overall_rate metric.
+        tests:
+          - accepted_values:
+              values: [true, false]
+              config:
+                severity: warn
 
       # ── Tracking coverage flags ──────────────────────────────────────────────
       - name: has_any_tracking
         description: "True when at least one tracking method (mobile, macropoint, or EDI) was active."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: has_mobile_app_tracking
         description: "True when the carrier used the Loadsmart mobile app for tracking."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: has_macropoint_tracking
         description: "True when Macropoint GPS tracking was active for this load."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: has_edi_tracking
         description: "True when EDI-based tracking updates were received."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       # ── Load metadata ────────────────────────────────────────────────────────
       - name: contracted_load
         description: "True when the load was under a contracted rate (as opposed to spot)."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: load_booked_autonomously
         description: "True when the booking was completed without human intervention. Source of autonomous_booking_rate metric."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: load_sourced_autonomously
         description: "True when carrier sourcing was completed autonomously. Source of autonomous_sourcing_rate metric."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: load_was_cancelled
         description: "True when the load was cancelled before delivery. Drives cancellation_rate metric."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: vip_carrier
         description: "True when the assigned carrier has VIP status."
+        tests:
+          - accepted_values:
+              values: [true, false]
 
       - name: carrier_dropped_us_count
         description: "Number of times the carrier dropped (abandoned) this load. Used in drop rate metrics."

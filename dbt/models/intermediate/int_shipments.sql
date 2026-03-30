@@ -6,7 +6,7 @@
 
   Key decisions:
   - computed_pnl substitui o campo pnl raw, inconsistente em 24 linhas
-    (ver docs/raw_data_findings.md — achado #5).
+    (ver docs/analysis/raw-data-findings.md — achado #5).
   - Cargas canceladas são mantidas. A fact table expõe a flag LOAD_WAS_CANCELLED
     para que consumidores filtrem conforme necessário.
 */
