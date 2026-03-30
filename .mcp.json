@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "superset": {
+      "url": "http://localhost:5008/mcp"
+    }
+  }
+}

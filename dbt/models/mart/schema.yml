@@ -1,0 +1,122 @@
+version: 2
+
+models:
+  - name: dim_carrier
+    description: "One row per unique carrier. Includes 'Unknown' sentinel for null carriers."
+    columns:
+      - name: carrier_sk
+        description: "Surrogate key"
+        tests:
+          - not_null
+          - unique
+      - name: carrier_name
+        description: "Carrier identifier"
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_shipper
+    description: "One row per unique shipper."
+    columns:
+      - name: shipper_sk
+        description: "Surrogate key"
+        tests:
+          - not_null
+          - unique
+      - name: shipper_name
+        description: "Shipper identifier"
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_location
+    description: "One row per unique city+state combination (pickup and delivery unified)."
+    columns:
+      - name: location_sk
+        description: "Surrogate key"
+        tests:
+          - not_null
+          - unique
+      - name: city
+        tests:
+          - not_null
+      - name: state
+        tests:
+          - not_null
+
+  - name: dim_date
+    description: "Calendar date spine covering all dates present in the dataset."
+    columns:
+      - name: date_sk
+        description: "Surrogate key"
+        tests:
+          - not_null
+          - unique
+      - name: date_day
+        tests:
+          - not_null
+          - unique
+
+  - name: fct_shipments
+    description: >
+      Fact table. Grain: one row per loadsmart_id (deduplicated).
+      Contains all FK references to dimensions and all business measures.
+    columns:
+      - name: loadsmart_id
+        description: "Natural key of the shipment"
+        tests:
+          - not_null
+          - unique
+
+      - name: carrier_sk
+        description: "FK to dim_carrier"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_carrier')
+              field: carrier_sk
+
+      - name: shipper_sk
+        description: "FK to dim_shipper"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_shipper')
+              field: shipper_sk
+
+      - name: pickup_location_sk
+        description: "FK to dim_location (origin)"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_location')
+              field: location_sk
+
+      - name: delivery_location_sk
+        description: "FK to dim_location (destination)"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_location')
+              field: location_sk
+
+      - name: pickup_date_sk
+        description: "FK to dim_date (pickup)"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+
+      - name: delivery_date_sk
+        description: "FK to dim_date (delivery)"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+
+      - name: pnl
+        description: "Computed PnL: book_price - source_price"
+        tests:
+          - not_null
