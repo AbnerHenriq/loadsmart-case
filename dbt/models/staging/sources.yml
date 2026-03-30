@@ -1,0 +1,73 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: "Raw ingestion layer — loaded directly from the source CSV via scripts/ingest.py"
+    tables:
+      - name: shipments
+        description: >
+          One row per shipment as received from the source CSV.
+          Contains all original columns including the deduplicated
+          has_mobile_app_tracking (duplicate dropped on ingest).
+        columns:
+          - name: loadsmart_id
+            description: "Unique identifier for the shipment"
+          - name: lane
+            description: "Origin and destination in the format 'City,ST -> City,ST'"
+          - name: quote_date
+            description: "Timestamp when the quote was created"
+          - name: book_date
+            description: "Timestamp when the shipment was booked"
+          - name: source_date
+            description: "Timestamp when a carrier was sourced"
+          - name: pickup_date
+            description: "Scheduled pickup datetime"
+          - name: delivery_date
+            description: "Actual or scheduled delivery datetime"
+          - name: book_price
+            description: "Price charged to the shipper (USD)"
+          - name: source_price
+            description: "Price paid to the carrier (USD)"
+          - name: pnl
+            description: "Profit and loss: book_price - source_price (USD)"
+          - name: mileage
+            description: "Distance of the shipment in miles"
+          - name: equipment_type
+            description: "Type of truck/trailer required (e.g. RFR, DRV)"
+          - name: carrier_rating
+            description: "Internal rating of the carrier (may be null)"
+          - name: sourcing_channel
+            description: "Channel used to source the carrier (e.g. dat_in)"
+          - name: vip_carrier
+            description: "Whether the carrier is flagged as VIP (TRUE/FALSE)"
+          - name: carrier_dropped_us_count
+            description: "Number of times this carrier has dropped Loadsmart loads"
+          - name: carrier_name
+            description: "Name/identifier of the carrier"
+          - name: shipper_name
+            description: "Name/identifier of the shipper"
+          - name: carrier_on_time_to_pickup
+            description: "Whether the carrier arrived on time for pickup"
+          - name: carrier_on_time_to_delivery
+            description: "Whether the carrier delivered on time"
+          - name: carrier_on_time_overall
+            description: "Overall on-time flag (pickup AND delivery)"
+          - name: pickup_appointment_time
+            description: "Appointment time set for pickup"
+          - name: delivery_appointment_time
+            description: "Appointment time set for delivery"
+          - name: has_mobile_app_tracking
+            description: "Whether mobile app tracking was used"
+          - name: has_macropoint_tracking
+            description: "Whether Macropoint GPS tracking was used"
+          - name: has_edi_tracking
+            description: "Whether EDI tracking was used"
+          - name: contracted_load
+            description: "Whether this load was under a contracted rate"
+          - name: load_booked_autonomously
+            description: "Whether the load was booked without human intervention"
+          - name: load_sourced_autonomously
+            description: "Whether the carrier was sourced without human intervention"
+          - name: load_was_cancelled
+            description: "Whether the load was ultimately cancelled"

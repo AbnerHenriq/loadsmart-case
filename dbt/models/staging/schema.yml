@@ -1,0 +1,105 @@
+version: 2
+
+models:
+  - name: stg_shipments
+    description: >
+      Cleaned and typed staging layer for shipments.
+      One row per loadsmart_id. Lane column is parsed into
+      pickup_city, pickup_state, delivery_city, delivery_state.
+      All dates are cast to timestamp. Booleans are normalized.
+      Duplicate raw column (has_mobile_app_tracking) was dropped at ingest.
+    columns:
+      - name: loadsmart_id
+        description: "Unique identifier for the shipment"
+        tests:
+          - not_null
+          # NOTE: 4 duplicate loadsmart_ids found in source (exact row duplicates).
+          # Test set to warn — duplicates should be deduplicated in intermediate layer.
+          - unique:
+              config:
+                severity: warn
+
+      - name: lane_raw
+        description: "Original lane string"
+        tests:
+          - not_null
+
+      - name: pickup_city
+        description: "Parsed origin city"
+        tests:
+          - not_null
+
+      - name: pickup_state
+        description: "Parsed origin state (2-letter code)"
+        tests:
+          - not_null
+
+      - name: delivery_city
+        description: "Parsed destination city"
+        tests:
+          - not_null
+
+      - name: delivery_state
+        description: "Parsed destination state (2-letter code)"
+        tests:
+          - not_null
+
+      - name: booked_at
+        description: "Timestamp when the shipment was booked"
+        tests:
+          - not_null
+
+      - name: pickup_at
+        description: "Scheduled pickup timestamp"
+        tests:
+          - not_null
+
+      - name: delivered_at
+        description: "Actual or scheduled delivery timestamp"
+        tests:
+          - not_null
+
+      - name: book_price
+        description: "Price charged to the shipper (USD)"
+        tests:
+          - not_null
+          # NOTE: 530 rows have book_price <= 0, mostly cancelled loads.
+          # Kept as warn to surface the issue without blocking the pipeline.
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+              config:
+                severity: warn
+
+      - name: source_price
+        description: "Price paid to the carrier (USD)"
+        tests:
+          - not_null
+          # NOTE: 519 rows have source_price = 0, 511 of which are cancelled loads.
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+              config:
+                severity: warn
+
+      - name: mileage
+        description: "Distance in miles"
+        tests:
+          - not_null
+          # NOTE: 47 rows have mileage = 0 (45 non-cancelled — likely a data gap).
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+              config:
+                severity: warn
+
+      - name: carrier_name
+        description: "Carrier identifier"
+        tests:
+          # NOTE: 499 null carrier_names (9.31%). Heavily correlated with cancelled loads.
+          # Set to warn — null is valid for cancelled shipments where no carrier was assigned.
+          - not_null:
+              config:
+                severity: warn
+
+      - name: shipper_name
+        description: "Shipper identifier"
+        tests:
+          - not_null

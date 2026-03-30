@@ -1,0 +1,14 @@
+# Dependências locais — dbt + ingestão + notebooks
+# O Airflow e o Superset rodam exclusivamente dentro do Docker (ver docker-compose.yml)
+dbt-core==1.9.0
+dbt-duckdb==1.9.6
+duckdb==1.1.0
+pandas==2.2.2
+python-dateutil==2.9.0
+
+# Jupyter
+jupyter==1.1.1
+ipykernel==6.29.5
+
+# Funções utilitárias do notebook
+paramiko==3.4.0

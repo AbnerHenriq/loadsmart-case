@@ -1,0 +1,41 @@
+# ── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ── Jupyter ───────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── DuckDB ────────────────────────────────────────────────
+*.duckdb
+*.duckdb.wal
+
+# ── Dados brutos e exports ────────────────────────────────
+data/exports/
+# Manter o CSV do desafio versionado (necessário para reprodução)
+# Se preferir não versionar, descomente a linha abaixo:
+# data/*.csv
+
+# ── Variáveis de ambiente / segredos ─────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Airflow ───────────────────────────────────────────────
+logs/
+airflow/logs/
+
+# ── dbt ───────────────────────────────────────────────────
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# ── Docker ────────────────────────────────────────────────
+docker/superset/superset_home/
+
+# ── macOS ─────────────────────────────────────────────────
+.DS_Store
+.claude/
