@@ -213,6 +213,21 @@ print(f"Layout aplicado. URL: {BASE}/superset/dashboard/{dash_id}/")
 
 ---
 
+## Viz types confirmados neste build (apache/superset:latest 6.0.1)
+
+| viz_type | Uso | Status |
+|---|---|---|
+| `big_number_total` | KPI único | ✓ funciona |
+| `echarts_timeseries_bar` | Série temporal (x_axis + time_grain) | ✓ funciona |
+| `pie` | Donut / pizza | ✓ funciona |
+| `table` | Ranking, top N, breakdown por dimensão | ✓ funciona |
+| `bar` | Barra categórica (legado) | ✗ "Item with key 'bar' is not registered" |
+| `echarts_bar` | Barra categórica (ECharts) | ✗ "Item with key 'echarts_bar' is not registered" |
+
+> **Regra:** A API REST aceita qualquer string como `viz_type` (retorna 201), mas o frontend falha se o plugin não estiver no bundle. Para charts agrupados por dimensão (`groupby`), usar **`table`**.
+
+---
+
 ## Armadilhas conhecidas
 
 | Problema | Causa | Solução |
@@ -222,6 +237,8 @@ print(f"Layout aplicado. URL: {BASE}/superset/dashboard/{dash_id}/")
 | `position_json` ignorado no POST | API não aceita layout na criação | Criar dashboard vazio (POST) e depois aplicar layout (PUT) |
 | Charts duplicados ao re-rodar | Script cria novos charts sem verificar existência | Verificar `/api/v1/chart/?q=...` antes de criar |
 | CSRF missing no PUT | Sessão não mantém cookies | Usar `requests.Session()`, não `requests.put()` avulso |
+| "Item with key X is not registered" | Plugin de viz não carregado no bundle | Ver tabela de viz types acima; usar `table` para categorias |
+| "Columns missing in dataset" | Nome de coluna em lowercase, dataset usa UPPERCASE | Validar colunas via `GET /api/v1/dataset/{id}` antes de criar charts |
 
 ---
 

@@ -116,7 +116,139 @@ models:
               to: ref('dim_date')
               field: date_sk
 
-      - name: pnl
-        description: "Computed PnL: book_price - source_price"
+      # ── Surrogate keys (additional) ─────────────────────────────────────────
+      - name: booked_date_sk
+        description: "FK to dim_date (booking date)"
+
+      - name: book_price
+        description: "Price charged to the shipper (USD). May be ≤ 0 for cancelled loads."
         tests:
           - not_null
+
+      - name: source_price
+        description: "Price paid to the carrier (USD). Zero for loads where no carrier was assigned."
+        tests:
+          - not_null
+
+      - name: pnl
+        description: "Computed PnL: book_price - source_price (USD)"
+        tests:
+          - not_null
+
+      - name: book_price_per_mile
+        description: "book_price / mileage (USD/mile). Null when mileage = 0."
+
+      # ── Distance and time measures ───────────────────────────────────────────
+      - name: mileage
+        description: "Shipment distance in miles. 47 rows have mileage = 0 (data gap, not cancelled)."
+
+      - name: lead_time_days
+        description: "Days between quote and booking (quote_at → booked_at)."
+
+      - name: booking_to_pickup_days
+        description: "Days between booking and pickup (booked_at → pickup_at). Proxy for advance planning."
+
+      # ── Shipment attributes ──────────────────────────────────────────────────
+      - name: equipment_type
+        description: "Truck/trailer type (e.g. Dry Van, Reefer, Flatbed)."
+
+      - name: sourcing_channel
+        description: "How the carrier was sourced (e.g. spot, contracted)."
+
+      # ── Performance flags (boolean) ──────────────────────────────────────────
+      - name: is_profitable
+        description: "True when pnl > 0."
+
+      - name: is_mileage_valid
+        description: "True when mileage > 0. Used to filter cost-per-mile metrics."
+
+      - name: delivered_on_time
+        description: "Overall on-time delivery flag from the shipper perspective."
+
+      # ── On-time SLA flags (carrier perspective) ──────────────────────────────
+      - name: carrier_on_time_to_pickup
+        description: >
+          True when the carrier arrived at the pickup location on or before the
+          scheduled pickup appointment. Source of on_time_pickup_rate metric.
+
+      - name: carrier_on_time_to_delivery
+        description: >
+          True when the carrier completed delivery on or before the scheduled
+          delivery appointment. Source of on_time_delivery_rate metric.
+
+      - name: carrier_on_time_overall
+        description: >
+          True when both pickup and delivery were on time. Primary SLA flag used
+          in the SLA e Pontualidade por Lane dashboard. Source of on_time_overall_rate metric.
+
+      # ── Tracking coverage flags ──────────────────────────────────────────────
+      - name: has_any_tracking
+        description: "True when at least one tracking method (mobile, macropoint, or EDI) was active."
+
+      - name: has_mobile_app_tracking
+        description: "True when the carrier used the Loadsmart mobile app for tracking."
+
+      - name: has_macropoint_tracking
+        description: "True when Macropoint GPS tracking was active for this load."
+
+      - name: has_edi_tracking
+        description: "True when EDI-based tracking updates were received."
+
+      # ── Load metadata ────────────────────────────────────────────────────────
+      - name: contracted_load
+        description: "True when the load was under a contracted rate (as opposed to spot)."
+
+      - name: load_booked_autonomously
+        description: "True when the booking was completed without human intervention. Source of autonomous_booking_rate metric."
+
+      - name: load_sourced_autonomously
+        description: "True when carrier sourcing was completed autonomously. Source of autonomous_sourcing_rate metric."
+
+      - name: load_was_cancelled
+        description: "True when the load was cancelled before delivery. Drives cancellation_rate metric."
+
+      - name: vip_carrier
+        description: "True when the assigned carrier has VIP status."
+
+      - name: carrier_dropped_us_count
+        description: "Number of times the carrier dropped (abandoned) this load. Used in drop rate metrics."
+
+      # ── Timestamps ───────────────────────────────────────────────────────────
+      - name: quote_at
+        description: "Timestamp when the shipment was quoted."
+
+      - name: booked_at
+        description: "Timestamp when the shipment was booked."
+
+      - name: sourced_at
+        description: "Timestamp when a carrier was sourced."
+
+      - name: pickup_at
+        description: "Actual pickup timestamp."
+
+      - name: delivered_at
+        description: "Actual delivery timestamp. Primary time axis for Superset dashboards."
+
+      - name: pickup_appointment_at
+        description: "Scheduled pickup appointment timestamp."
+
+      - name: delivery_appointment_at
+        description: "Scheduled delivery appointment timestamp."
+
+      # ── Geography / lane ────────────────────────────────────────────────────
+      - name: lane_raw
+        description: >
+          Original lane string from source, formatted as 'City,ST -> City,ST'.
+          Used as the primary lane dimension in SLA dashboards. All 5,357 rows are non-null.
+
+      - name: pickup_city
+        description: "Origin city, parsed from lane_raw."
+
+      - name: pickup_state
+        description: "Origin state (2-letter code), parsed from lane_raw."
+
+      - name: delivery_city
+        description: "Destination city, parsed from lane_raw."
+
+      - name: delivery_state
+        description: "Destination state (2-letter code), parsed from lane_raw."

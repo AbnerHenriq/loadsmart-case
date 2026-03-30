@@ -57,83 +57,38 @@ loadsmart/
 
 ---
 
-## Como subir o ambiente
+## Como rodar o projeto
 
-### 1. Clone o repositório
+**Pré-requisito:** Docker instalado.
+
+### Passo 1 — Clone e suba os containers
 
 ```bash
 git clone <repo-url>
 cd loadsmart_case
-```
-
-### 2. Copie o CSV de origem
-
-Coloque o arquivo `2026_data_challenge_ae_data.csv` dentro de `data/`.
-
-### Q3. Suba os containers
-
-```bash
 docker compose up -d
 ```
 
-O `airflow-init` cria o banco de metadados e o usuário admin automaticamente.
-Aguarde ~30 segundos para o webserver ficar disponível.
+### Passo 2 — Execute o pipeline de dados
 
-### 4. Acesse o Airflow
+Acesse o **Airflow** em [http://localhost:9090](http://localhost:9090) (usuário e senha: `admin`).
 
-Abra [http://localhost:9090](http://localhost:9090)
+Localize o pipeline `loadsmart_pipeline` e clique em **Trigger DAG** (ícone de play).
+Aguarde os três passos concluírem: `ingest_csv → dbt_run → dbt_test` (~2 min).
 
+### Passo 3 — Acesse o Superset
 
-| Campo   | Valor   |
-| ------- | ------- |
-| Usuário | `admin` |
-| Senha   | `admin` |
+Assim que o pipeline terminar, o Superset em [http://localhost:8088](http://localhost:8088) estará pronto com tudo configurado automaticamente:
 
+- Conexão com o banco de dados
+- Datasets com todas as colunas
+- 48 métricas organizadas em 5 domínios
+- 5 dashboards prontos para uso
 
-### 5. Acesse o Superset
+Login: `admin` / `admin`
 
-O Superset é buildado localmente com `duckdb-engine` incluído. Na primeira execução, o `superset-init` inicializa o banco de metadados (SQLite) e cria o admin — isso pode levar ~1 minuto.
-
-Abra [http://localhost:8088](http://localhost:8088)
-
-
-| Campo   | Valor   |
-| ------- | ------- |
-| Usuário | `admin` |
-| Senha   | `admin` |
-
-
-**Configurar conexão com o DuckDB:**
-
-1. Menu **Settings → Database Connections → + Database**
-2. Selecione **Other** como banco
-3. Em **SQLAlchemy URI**, insira exatamente:
-  ```
-   duckdb:////opt/airflow/data/loadsmart.duckdb
-  ```
-4. Clique em **Test Connection** → **Connect**
-
-> **Por que esse caminho?** O `docker-compose.yml` monta `./data` em `/opt/airflow/data` dentro do container do Superset. O arquivo `loadsmart.duckdb` fica nesse volume compartilhado, acessível tanto pelo Airflow quanto pelo Superset.
->
-> **Pacotes incluídos na imagem:** `duckdb==1.1.0` e `duckdb-engine==0.13.2` são instalados no Dockerfile diretamente no virtualenv do Superset (`/app/.venv`), garantindo que a conexão funcione após qualquer rebuild.
-
----
-
-## Como rodar o pipeline
-
-### Via Airflow UI (recomendado)
-
-1. Acesse [http://localhost:9090](http://localhost:9090)
-2. Ative a DAG `loadsmart_pipeline` (toggle no lado esquerdo)
-3. Clique em **Trigger DAG** (ícone de play)
-4. Acompanhe a execução: `ingest_csv → dbt_run → dbt_test`
-
-### Via CLI (dentro do container)
-
-```bash
-docker compose exec airflow-webserver \
-  airflow dags trigger loadsmart_pipeline
-```
+> O serviço `superset-bootstrap` aguarda o pipeline terminar e configura tudo sozinho.
+> Se o Superset abrir antes de o pipeline concluir, aguarde mais alguns instantes e recarregue a página.
 
 ### Localmente (sem Docker)
 
