@@ -26,31 +26,36 @@
 ## Estrutura do projeto
 
 ```
-loadsmart/
-├── data/                          # CSV de origem e arquivo DuckDB
+loadsmart_case/
+├── Makefile                           # make setup / reset / teardown
+├── docker-compose.yml                 # Airflow + Superset + DuckDB
+├── docker/superset/
+│   ├── Dockerfile                     # Imagem com duckdb-engine instalado
+│   └── superset_config.py
+├── data/
 │   └── 2026_data_challenge_ae_data.csv
 ├── scripts/
-│   └── ingest.py                  # Carrega CSV → DuckDB raw.shipments
+│   ├── ingest.py                      # CSV → DuckDB raw.shipments
+│   └── superset_bootstrap.py          # Configura conexão, dataset, métricas e dashboards
 ├── dbt/
 │   ├── dbt_project.yml
 │   ├── profiles.yml
 │   ├── packages.yml
 │   └── models/
-│       ├── staging/               # stg_shipments
-│       ├── intermediate/          # int_shipments_enriched
-│       └── mart/                  # dim_* + fct_shipments
-├── airflow/
-│   └── dags/
-│       └── loadsmart_pipeline.py  # ingest → dbt run → dbt test
-├── docker/
-│   └── superset/
-│       ├── Dockerfile             # Imagem customizada com duckdb-engine
-│       └── superset_config.py     # Configuração SQLite + secret key
+│       ├── staging/                   # stg_shipments
+│       ├── intermediate/              # int_shipments
+│       └── mart/                      # dim_* + fct_shipments
+├── airflow/dags/
+│   └── loadsmart_pipeline.py          # ingest → dbt run → dbt test
 ├── notebooks/
-│   └── loadsmart_analysis.ipynb  # split_lane, send_csv_email, send_csv_sftp, exports
+│   └── loadsmart_analysis.ipynb
 ├── docs/
-│   └── raw_data_findings.md       # Achados de qualidade do dado raw
-├── docker-compose.yml
+│   ├── raw_data_findings.md
+│   └── runbooks/
+│       ├── superset_dashboards.md
+│       ├── superset_metrics.md
+│       ├── superset_datasets.md
+│       └── superset_connections.md
 ├── .env
 └── requirements.txt
 ```
@@ -59,36 +64,31 @@ loadsmart/
 
 ## Como rodar o projeto
 
-**Pré-requisito:** Docker instalado.
-
-### Passo 1 — Clone e suba os containers
+**Pré-requisito:** Docker Desktop instalado e rodando.
 
 ```bash
 git clone <repo-url>
 cd loadsmart_case
-docker compose up -d
+make setup
 ```
 
-### Passo 2 — Execute o pipeline de dados
+Isso sobe todos os containers, executa o pipeline de dados (ingest → dbt run → dbt test) e configura o Superset automaticamente. Ao final, acesse:
 
-Acesse o **Airflow** em [http://localhost:9090](http://localhost:9090) (usuário e senha: `admin`).
+- **Superset:** [http://localhost:8088](http://localhost:8088) — login `admin` / `admin`
+- **Airflow:** [http://localhost:9090](http://localhost:9090) — login `admin` / `admin`
 
-Localize o pipeline `loadsmart_pipeline` e clique em **Trigger DAG** (ícone de play).
-Aguarde os três passos concluírem: `ingest_csv → dbt_run → dbt_test` (~2 min).
+O Superset abre com 6 dashboards, 48 métricas e a conexão com o DuckDB já configurados.
 
-### Passo 3 — Acesse o Superset
+### Outros comandos
 
-Assim que o pipeline terminar, o Superset em [http://localhost:8088](http://localhost:8088) estará pronto com tudo configurado automaticamente:
-
-- Conexão com o banco de dados
-- Datasets com todas as colunas
-- 48 métricas organizadas em 5 domínios
-- 5 dashboards prontos para uso
-
-Login: `admin` / `admin`
-
-> O serviço `superset-bootstrap` aguarda o pipeline terminar e configura tudo sozinho.
-> Se o Superset abrir antes de o pipeline concluir, aguarde mais alguns instantes e recarregue a página.
+```bash
+make status      # estado dos containers e do último run do pipeline
+make reset       # derruba tudo e reconstrói do zero (teardown + setup)
+make teardown    # remove containers, volumes e imagens locais
+make open        # abre Airflow e Superset no navegador
+make logs-pipeline   # logs do pipeline de dados
+make logs-bootstrap  # logs da configuração automática do Superset
+```
 
 ### Localmente (sem Docker)
 
@@ -234,25 +234,20 @@ print(df)
 
 ## Métricas e Dashboards (Superset)
 
-### Dataset virtual
+Tudo configurado automaticamente pelo `superset_bootstrap.py` durante o `make setup`.
 
-No Superset, crie um **Virtual Dataset** (SQL) para pré-joinar as dimensões de nome:
+### Dashboards disponíveis
 
-```sql
-SELECT
-    f.*,
-    dc.carrier_name,
-    ds.shipper_name
-FROM main_mart.fct_shipments f
-LEFT JOIN main_mart.dim_carrier  dc ON f.carrier_sk = dc.carrier_sk
-LEFT JOIN main_mart.dim_shipper  ds ON f.shipper_sk = ds.shipper_sk
-```
+| Dashboard | Audiência | Perguntas respondidas |
+|---|---|---|
+| Saúde Financeira | CFO / Pricing | PnL, margem, receita por milha |
+| Volume & Funil Operacional | Ops Manager | Volume, cancelamento, lead time |
+| Desempenho de Carrier | Ops Manager | On-time rates, drops, VIP carriers |
+| Autonomia Operacional | Produto | Booking/sourcing autônomo vs. intervenção humana |
+| Tracking & Visibilidade | Produto | Cobertura mobile, Macropoint, EDI |
+| SLA e Pontualidade por Lane | Operação | On-time por lane, transit time, ranking por estado |
 
-Configure `delivered_at` como **coluna temporal** do dataset.
-
-### Métricas calculadas
-
-Adicionar em **Edit Dataset → Metrics** no Superset:
+### Métricas calculadas (48 total)
 
 > **Regra:** nunca pré-calcular razões — sempre somar componentes antes de dividir.
 
@@ -415,15 +410,10 @@ conhecidos, permitindo que o pipeline rode enquanto os problemas são investigad
 
 ---
 
-## Parar o ambiente
+## Parar e resetar o ambiente
 
 ```bash
-docker compose down
-```
-
-Para remover também os volumes (dados do Postgres de metadados do Airflow):
-
-```bash
-docker compose down -v
+make teardown    # para e remove containers, volumes e imagens locais
+make reset       # teardown + setup completo (útil para recomeçar do zero)
 ```
 
