@@ -9,6 +9,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
     DUCKDB_PATH: /opt/airflow/data/loadsmart.duckdb
   volumes:
     - ./airflow/dags:/opt/airflow/dags
@@ -121,6 +123,23 @@ services:
       superset-init:
         condition: service_completed_successfully
     restart: unless-stopped
+
+  superset-bootstrap:
+    build: ./docker/superset
+    env_file: .env
+    environment:
+      SUPERSET_URL: http://superset:8088
+      SUPERSET_USERNAME: admin
+      SUPERSET_PASSWORD: admin
+      DUCKDB_PATH: /opt/airflow/data/loadsmart.duckdb
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/opt/airflow/data
+    command: ["python", "/scripts/superset_bootstrap.py"]
+    depends_on:
+      superset:
+        condition: service_healthy
+    restart: on-failure
 
   superset-mcp:
     build: ./docker/superset
