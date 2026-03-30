@@ -11,8 +11,7 @@ Todos os números abaixo foram extraídos diretamente da camada `raw` antes de q
 
 O CSV contém esta coluna **duas vezes** com exatamente o mesmo nome. Pandas renomeia automaticamente a segunda ocorrência para `has_mobile_app_tracking.1`. A coluna duplicada foi dropada no script de ingestão (`scripts/ingest.py`) antes do carregamento no DuckDB, mantendo apenas a primeira ocorrência.
 
-**Sugestão:** Investigar se as duas colunas representam conceitos distintos (ex: tracking iniciado pelo carrier vs. pelo shipper). Se sim, ambas devem ser renomeadas e documentadas corretamente na fonte.
--- TODO: Manter coluna na ingestão e verificar se são os mesmos dados. Apenas renomear ou dropar na staging, se for o caso, mas trazer na ingestão.
+**Resolução:** Ambas as colunas são mantidas na ingestão (`scripts/ingest.py`): a segunda ocorrência é renomeada para `has_mobile_app_tracking_2`. Na camada staging (`stg_shipments.sql`) foi confirmado que as duas colunas são **idênticas** (0 divergências), portanto `has_mobile_app_tracking_2` é dropada ali — a coluna original segue exposta no mart. O raw preserva ambas para auditoria futura.
 
 ---
 
