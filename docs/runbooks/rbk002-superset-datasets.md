@@ -143,7 +143,7 @@ print("Colunas sincronizadas")
 
 ## 5. Adicionar métricas a um dataset existente
 
-Ver runbook `superset_metrics.md` para o padrão completo.
+Ver runbook `rbk003-superset-metrics.md` para o padrão completo.
 O campo-chave: sempre fazer GET das métricas existentes, filtrar para `ALLOWED_MET`,
 e enviar tudo junto no PUT (não apenas as novas).
 

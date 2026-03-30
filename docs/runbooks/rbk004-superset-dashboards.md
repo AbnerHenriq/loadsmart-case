@@ -10,7 +10,7 @@ layout de grid. Este runbook documenta o fluxo completo descoberto na versão **
 ## Pré-requisitos
 
 - Superset rodando em `http://localhost:8088`
-- Dataset criado com as métricas necessárias (ver `superset_metrics.md`)
+- Dataset criado com as métricas necessárias (ver `rbk003-superset-metrics.md`)
 - Python com `requests` instalado
 
 ---
