@@ -5,7 +5,7 @@
   - Coluna duplicada has_mobile_app_tracking_2 confirmada idêntica à original
     (0 divergências) — dropada aqui, mantida no raw para auditoria.
   - Deduplicação de loadsmart_id via QUALIFY: 4 pares de linhas idênticas
-    encontrados no raw (ver docs/raw_data_findings.md — achado #2).
+    encontrados no raw (ver docs/analysis/raw-data-findings.md — achado #2).
   - Datas parseadas via macro parse_ts.
   - Nomes de coluna em UPPERCASE.
 */

@@ -3,7 +3,7 @@
   ───────────
   One row per unique carrier. Includes a default "Unknown" member (carrier_sk = -1)
   to preserve referential integrity for the ~499 shipments where carrier_name is null
-  (mostly cancelled loads — see docs/raw_data_findings.md, finding #3).
+  (mostly cancelled loads — see docs/analysis/raw-data-findings.md, finding #3).
 */
 
 with carriers as (
