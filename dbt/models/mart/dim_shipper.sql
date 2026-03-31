@@ -13,7 +13,7 @@ with shippers as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['shipper_name']) }} as shipper_sk,
-    shipper_name
+    {{ dbt_utils.generate_surrogate_key(['shipper_name']) }} as SHIPPER_SK,
+    shipper_name                                             as SHIPPER_NAME
 
 from shippers

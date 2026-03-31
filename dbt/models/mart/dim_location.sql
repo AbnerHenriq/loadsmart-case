@@ -30,8 +30,8 @@ all_locations as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['city', 'state']) }} as location_sk,
-    city,
-    state
+    {{ dbt_utils.generate_surrogate_key(['city', 'state']) }} as LOCATION_SK,
+    city                                                       as CITY,
+    state                                                      as STATE
 
 from all_locations

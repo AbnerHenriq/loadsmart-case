@@ -1,16 +1,3 @@
-/*
-  fct_shipments
-  ─────────────
-  Grain: one row per unique loadsmart_id (post-deduplication).
-  Contains all foreign keys to dimensions and all measures.
-
-  FK resolution:
-  - carrier_sk   → dim_carrier  (nulls resolve to 'unknown-carrier' sentinel)
-  - shipper_sk   → dim_shipper
-  - pickup_location_sk / delivery_location_sk → dim_location
-  - pickup_date_sk / delivery_date_sk → dim_date
-*/
-
 with shipments as (
 
     select * from {{ ref('int_shipments') }}
@@ -141,4 +128,68 @@ joined as (
 
 )
 
-select * from joined
+select
+    -- natural key
+    loadsmart_id                as LOADSMART_ID,
+
+    -- foreign keys
+    carrier_sk                  as CARRIER_SK,
+    shipper_sk                  as SHIPPER_SK,
+    pickup_location_sk          as PICKUP_LOCATION_SK,
+    delivery_location_sk        as DELIVERY_LOCATION_SK,
+    pickup_date_sk              as PICKUP_DATE_SK,
+    delivery_date_sk            as DELIVERY_DATE_SK,
+    booked_date_sk              as BOOKED_DATE_SK,
+
+    -- measures
+    book_price                  as BOOK_PRICE,
+    source_price                as SOURCE_PRICE,
+    pnl                         as PNL,
+    mileage                     as MILEAGE,
+    lead_time_days              as LEAD_TIME_DAYS,
+    booking_to_pickup_days      as BOOKING_TO_PICKUP_DAYS,
+    book_price_per_mile         as BOOK_PRICE_PER_MILE,
+
+    -- shipment attributes
+    equipment_type              as EQUIPMENT_TYPE,
+    sourcing_channel            as SOURCING_CHANNEL,
+
+    -- performance flags
+    is_profitable               as IS_PROFITABLE,
+    is_mileage_valid            as IS_MILEAGE_VALID,
+    delivered_on_time           as DELIVERED_ON_TIME,
+    has_any_tracking            as HAS_ANY_TRACKING,
+    carrier_on_time_to_pickup   as CARRIER_ON_TIME_TO_PICKUP,
+    carrier_on_time_to_delivery as CARRIER_ON_TIME_TO_DELIVERY,
+    carrier_on_time_overall     as CARRIER_ON_TIME_OVERALL,
+
+    -- tracking detail
+    has_mobile_app_tracking     as HAS_MOBILE_APP_TRACKING,
+    has_macropoint_tracking     as HAS_MACROPOINT_TRACKING,
+    has_edi_tracking            as HAS_EDI_TRACKING,
+
+    -- load metadata
+    contracted_load             as CONTRACTED_LOAD,
+    load_booked_autonomously    as LOAD_BOOKED_AUTONOMOUSLY,
+    load_sourced_autonomously   as LOAD_SOURCED_AUTONOMOUSLY,
+    load_was_cancelled          as LOAD_WAS_CANCELLED,
+    vip_carrier                 as VIP_CARRIER,
+    carrier_dropped_us_count    as CARRIER_DROPPED_US_COUNT,
+
+    -- timestamps
+    quote_at                    as QUOTE_AT,
+    booked_at                   as BOOKED_AT,
+    sourced_at                  as SOURCED_AT,
+    pickup_at                   as PICKUP_AT,
+    delivered_at                as DELIVERED_AT,
+    pickup_appointment_at       as PICKUP_APPOINTMENT_AT,
+    delivery_appointment_at     as DELIVERY_APPOINTMENT_AT,
+
+    -- lane / geo
+    lane_raw                    as LANE_RAW,
+    pickup_city                 as PICKUP_CITY,
+    pickup_state                as PICKUP_STATE,
+    delivery_city               as DELIVERY_CITY,
+    delivery_state              as DELIVERY_STATE
+
+from joined

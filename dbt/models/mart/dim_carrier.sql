@@ -25,7 +25,7 @@ with_sk as (
 
     select
         {{ dbt_utils.generate_surrogate_key(['carrier_name']) }} as carrier_sk,
-        carrier_name,
+        NULLIF(TRIM(carrier_name), '')                           as carrier_name,
         carrier_rating,
         vip_carrier,
         carrier_dropped_us_count
@@ -44,8 +44,21 @@ unknown as (
         false              as vip_carrier,
         0                  as carrier_dropped_us_count
 
+),
+
+combined as (
+
+    select * from unknown
+    union all
+    select * from with_sk
+
 )
 
-select * from unknown
-union all
-select * from with_sk
+select
+    carrier_sk               as CARRIER_SK,
+    carrier_name             as CARRIER_NAME,
+    carrier_rating           as CARRIER_RATING,
+    vip_carrier              as VIP_CARRIER,
+    carrier_dropped_us_count as CARRIER_DROPPED_US_COUNT
+
+from combined
