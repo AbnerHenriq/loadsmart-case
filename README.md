@@ -36,6 +36,7 @@ loadsmart_case/
 │   └── 2026_data_challenge_ae_data.csv
 ├── scripts/
 │   ├── ingest.py                      # CSV → DuckDB raw.shipments
+│   ├── export_last_month.py           # Exportação mensal + envio por e-mail (opcional)
 │   └── superset_bootstrap.py          # Configura conexão, dataset, métricas e dashboards
 ├── dbt/
 │   ├── dbt_project.yml
@@ -46,7 +47,7 @@ loadsmart_case/
 │       ├── intermediate/              # int_shipments
 │       └── mart/                      # dim_* + fct_shipments
 ├── airflow/dags/
-│   └── loadsmart_pipeline.py          # ingest → dbt run → dbt test
+│   └── loadsmart_pipeline.py          # ingest → dbt run → dbt test → export_last_month
 ├── notebooks/
 │   └── loadsmart_analysis.ipynb
 ├── docs/
@@ -140,6 +141,64 @@ O notebook contém:
 
 ---
 
+### Exportação mensal por e-mail
+
+O pipeline inclui uma task `export_last_month` que, ao final de cada execução,
+grava o CSV em `data/exports/deliveries_YYYY_MM.csv` e o envia por e-mail caso
+as variáveis SMTP estejam configuradas.
+
+#### Como configurar
+
+Edite o `.env` e descomente as linhas SMTP:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=seuemail@gmail.com
+SMTP_PASSWORD=sua-app-password-aqui
+SMTP_RECIPIENTS=destinatario@example.com
+```
+
+> Separe múltiplos destinatários por vírgula: `a@x.com,b@y.com`
+
+#### Como obter uma App Password do Gmail
+
+O Gmail não aceita a senha da conta diretamente em conexões SMTP por aplicativo.
+Use uma **App Password** (senha de aplicativo):
+
+1. Acesse [myaccount.google.com/security](https://myaccount.google.com/security)
+2. Ative a **verificação em duas etapas** (se ainda não estiver ativa)
+3. Volte em Segurança → **Senhas de app** (ou busque "App Passwords")
+4. Escolha app **Outros (nome personalizado)** → escreva `loadsmart` → **Gerar**
+5. Copie a senha de 16 caracteres gerada (sem espaços) e cole em `SMTP_PASSWORD`
+
+#### Como testar localmente (sem Docker)
+
+```bash
+# Exporte as vars na sessão do terminal
+export SMTP_HOST=smtp.gmail.com
+export SMTP_PORT=587
+export SMTP_USER=seuemail@gmail.com
+export SMTP_PASSWORD=sua-app-password-aqui
+export SMTP_RECIPIENTS=destinatario@example.com
+export DUCKDB_PATH=data/loadsmart.duckdb
+
+# Rode o script diretamente
+source .venv/bin/activate
+python scripts/export_last_month.py
+```
+
+Ou no Jupyter: execute a célula 6 (Last-Month Export) e descomente o bloco
+`send_csv_email_from_path(...)` na última célula.
+
+#### Como funciona no Docker / Airflow
+
+O Docker Compose lê o `.env` automaticamente (`env_file: .env`), então basta
+descomentar as linhas SMTP no `.env` e re-triggar o DAG `loadsmart_pipeline`.
+A task `export_last_month` roda automaticamente após `dbt_test`.
+
+---
+
 ## Explorando o DuckDB
 
 O arquivo de banco fica em `data/loadsmart.duckdb` após rodar o pipeline.
@@ -189,7 +248,7 @@ print(df)
 2. Selecione **DuckDB**
   - Se não aparecer, vá em **Driver Manager → New** e adicione o driver JDBC do DuckDB
   - Download do driver: [duckdb.org/docs/api/java](https://duckdb.org/docs/api/java)
-3. Em **Path**, aponte para o arquivo: `/Users/abner.rodrigues/cases/loadsmart_case/data/loadsmart.duckdb`
+3. Em **Path**, aponte para o arquivo `data/loadsmart.duckdb` dentro do diretório do repositório
 4. Clique em **Test Connection** → **Finish**
 5. Na árvore de objetos, navegue em: `loadsmart.duckdb → main_mart → Tables`
 

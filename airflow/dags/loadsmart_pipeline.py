@@ -3,11 +3,14 @@ loadsmart_pipeline
 ──────────────────
 Orchestrates the full Loadsmart data pipeline:
 
-  ingest_csv  →  dbt_run  →  dbt_test
+  ingest_csv  →  dbt_run  →  dbt_test  →  export_last_month
 
-Schedule: manual trigger only (@once).
+Schedule: manual trigger only.
 Trigger via the Airflow UI or:
   docker compose exec airflow-webserver airflow dags trigger loadsmart_pipeline
+
+export_last_month writes a CSV to data/exports/ and — if the SMTP_*
+environment variables are set in .env — sends it by e-mail.
 """
 
 from __future__ import annotations
@@ -76,4 +79,16 @@ with DAG(
         env={**os.environ, "DUCKDB_PATH": DUCKDB_PATH},
     )
 
-    ingest_csv >> dbt_run >> dbt_test
+    def run_export(**context):
+        """Export last-month deliveries to CSV and optionally send by e-mail."""
+        import sys
+        sys.path.insert(0, "/opt/airflow/scripts")
+        from export_last_month import run
+        run(db_path=DUCKDB_PATH, output_dir="/opt/airflow/data/exports")
+
+    export_last_month = PythonOperator(
+        task_id="export_last_month",
+        python_callable=run_export,
+    )
+
+    ingest_csv >> dbt_run >> dbt_test >> export_last_month
