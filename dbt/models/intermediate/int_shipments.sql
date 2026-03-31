@@ -1,11 +1,7 @@
 SELECT
     loadsmart_id,
     lane_raw,
-    pickup_city,
-    pickup_state,
-    delivery_city,
-    delivery_state,
-
+    
     -- timestamps
     quote_at,
     booked_at,
@@ -68,6 +64,10 @@ SELECT
     contracted_load,
     load_booked_autonomously,
     load_sourced_autonomously,
-    load_was_cancelled
+    load_was_cancelled,
+    pickup_city,
+    pickup_state,
+    delivery_city,
+    delivery_state
 
 FROM {{ ref('stg_shipments') }}

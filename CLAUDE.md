@@ -24,27 +24,24 @@ All reserved SQL words must be written in UPPERCASE in dbt files:
 `SELECT`, `FROM`, `AS`, `WHERE`, `WITH`, `JOIN`, `ON`, `CASE`, `WHEN`, `THEN`, `ELSE`, `END`,
 `QUALIFY`, `PARTITION BY`, `ORDER BY`, `GROUP BY`, `COALESCE`, `NULLIF`, `TRIM`, `ROUND`, etc.
 
-### Columns: lowercase in stg/int, UPPERCASE only in the final `SELECT` of the mart
+### Columns: lowercase snake_case through `staging/`, `intermediate/`, and `mart/`
 
 - **`staging/` and `intermediate/`:** column identifiers in **lowercase snake_case**
-  (`loadsmart_id`, `booked_at`, `carrier_name`). Easier to read and matches `schema.yml`.
+  (`loadsmart_id`, `booked_at`, `carrier_name`).
 
-- **`mart/` (facts and dims):** in the model’s **final `SELECT`**, every column exposed to
-  consumers (Superset) must use an **`UPPERCASE`** alias (`AS CARRIER_NAME`,
-  `AS LOADSMART_ID`). The Superset API returns names exactly as in DuckDB — the bootstrap
-  uses them for `groupby`, filters, and metrics; case mismatch breaks charts.
+- **`mart/` (facts and dims):** the **final `SELECT`** exposes columns in **lowercase
+  snake_case** (`AS carrier_name`, `AS loadsmart_id`, `AS location_sk`). Superset and
+  scripts must reference the same names DuckDB materializes — keep metrics/datasets aligned
+  with `schema.yml`.
 
-Inner CTEs inside a `mart/` file keep intermediate columns in lowercase; only the final
-layer applies `AS ...` in uppercase.
+Inner CTEs inside a `mart/` file keep intermediate columns in lowercase; the final layer
+uses explicit `AS column_name` in the same style.
 
 ```sql
--- Inner CTE (lowercase)
-SELECT carrier_name, book_price FROM ...
-
--- Final mart SELECT (UPPERCASE)
+-- Final mart SELECT (snake_case)
 SELECT
-    carrier_name AS CARRIER_NAME,
-    book_price   AS BOOK_PRICE
+    carrier_name AS carrier_name,
+    book_price   AS book_price
 FROM ...
 ```
 
@@ -132,6 +129,6 @@ Exploratory analyses live in `docs/analysis/` (no numeric prefix).
 - Airflow: `http://localhost:9090` (admin / admin)
 - Main dataset: `fct_shipments` (id=1)
 - Idempotent bootstrap: `scripts/superset_bootstrap.py` (safe to re-run)
-- Critical pitfall: use `echarts_timeseries_bar` (not `bar`); `groupby` columns must be UPPERCASE
+- Critical pitfall: use `echarts_timeseries_bar` (not `bar`); `groupby` must use column names exactly as in DuckDB (mart uses `snake_case`)
 
 Reference runbooks: `docs/runbooks/rbk001` through `rbk005`.

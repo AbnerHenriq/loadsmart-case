@@ -1,15 +1,3 @@
-/*
-  stg_shipments
-  ─────────────
-  Cleanup, typing, and parsing from the raw layer.
-  - Duplicate column has_mobile_app_tracking_2 confirmed identical to the original
-    (0 divergences) — dropped here, kept in raw for audit.
-  - loadsmart_id deduplication via QUALIFY: 4 pairs of identical rows
-    found in raw (see docs/analysis/raw-data-findings.md — finding #2).
-  - Dates parsed via parse_ts macro.
-  - Columns in lowercase snake_case.
-*/
-
 SELECT
     -- identifiers
     loadsmart_id,
@@ -21,7 +9,7 @@ SELECT
     TRIM(SPLIT_PART(SPLIT_PART(lane, ' -> ', 2), ',', 1)) AS delivery_city,
     TRIM(SPLIT_PART(SPLIT_PART(lane, ' -> ', 2), ',', 2)) AS delivery_state,
 
-    -- dates (macro parse_ts: strptime(col, '%m/%d/%Y %H:%M')::timestamp)
+    -- dates
     {{ parse_ts('quote_date') }} AS quote_at,
     {{ parse_ts('book_date') }} AS booked_at,
     {{ parse_ts('source_date') }} AS sourced_at,
@@ -30,7 +18,7 @@ SELECT
     {{ parse_ts('pickup_appointment_time') }} AS pickup_appointment_at,
     {{ parse_ts('delivery_appointment_time') }} AS delivery_appointment_at,
 
-    -- financials (already DOUBLE from ingest)
+    -- financials
     book_price,
     source_price,
     pnl,

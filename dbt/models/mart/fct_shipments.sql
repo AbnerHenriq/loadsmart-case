@@ -6,7 +6,10 @@ WITH shipments AS (
 
 dim_carrier AS (
 
-    SELECT carrier_sk, carrier_name FROM {{ ref('dim_carrier') }}
+    SELECT
+        carrier_sk AS carrier_sk,
+        carrier_name AS carrier_name
+    FROM {{ ref('dim_carrier') }}
 
 ),
 
@@ -130,66 +133,66 @@ joined AS (
 
 SELECT
     -- natural key
-    loadsmart_id                AS LOADSMART_ID,
+    loadsmart_id                AS loadsmart_id,
 
     -- foreign keys
-    carrier_sk                  AS CARRIER_SK,
-    shipper_sk                  AS SHIPPER_SK,
-    pickup_location_sk          AS PICKUP_LOCATION_SK,
-    delivery_location_sk        AS DELIVERY_LOCATION_SK,
-    pickup_date_sk              AS PICKUP_DATE_SK,
-    delivery_date_sk            AS DELIVERY_DATE_SK,
-    booked_date_sk              AS BOOKED_DATE_SK,
+    carrier_sk                  AS carrier_sk,
+    shipper_sk                  AS shipper_sk,
+    pickup_location_sk          AS pickup_location_sk,
+    delivery_location_sk        AS delivery_location_sk,
+    pickup_date_sk              AS pickup_date_sk,
+    delivery_date_sk            AS delivery_date_sk,
+    booked_date_sk              AS booked_date_sk,
 
     -- measures
-    book_price                  AS BOOK_PRICE,
-    source_price                AS SOURCE_PRICE,
-    pnl                         AS PNL,
-    mileage                     AS MILEAGE,
-    lead_time_days              AS LEAD_TIME_DAYS,
-    booking_to_pickup_days      AS BOOKING_TO_PICKUP_DAYS,
-    book_price_per_mile         AS BOOK_PRICE_PER_MILE,
+    book_price                  AS book_price,
+    source_price                AS source_price,
+    pnl                         AS pnl,
+    mileage                     AS mileage,
+    lead_time_days              AS lead_time_days,
+    booking_to_pickup_days      AS booking_to_pickup_days,
+    book_price_per_mile         AS book_price_per_mile,
 
     -- shipment attributes
-    equipment_type              AS EQUIPMENT_TYPE,
-    sourcing_channel            AS SOURCING_CHANNEL,
+    equipment_type              AS equipment_type,
+    sourcing_channel            AS sourcing_channel,
 
     -- performance flags
-    is_profitable               AS IS_PROFITABLE,
-    is_mileage_valid            AS IS_MILEAGE_VALID,
-    delivered_on_time           AS DELIVERED_ON_TIME,
-    has_any_tracking            AS HAS_ANY_TRACKING,
-    carrier_on_time_to_pickup   AS CARRIER_ON_TIME_TO_PICKUP,
-    carrier_on_time_to_delivery AS CARRIER_ON_TIME_TO_DELIVERY,
-    carrier_on_time_overall     AS CARRIER_ON_TIME_OVERALL,
+    is_profitable               AS is_profitable,
+    is_mileage_valid            AS is_mileage_valid,
+    delivered_on_time           AS delivered_on_time,
+    has_any_tracking            AS has_any_tracking,
+    carrier_on_time_to_pickup   AS carrier_on_time_to_pickup,
+    carrier_on_time_to_delivery AS carrier_on_time_to_delivery,
+    carrier_on_time_overall     AS carrier_on_time_overall,
 
     -- tracking detail
-    has_mobile_app_tracking     AS HAS_MOBILE_APP_TRACKING,
-    has_macropoint_tracking     AS HAS_MACROPOINT_TRACKING,
-    has_edi_tracking            AS HAS_EDI_TRACKING,
+    has_mobile_app_tracking     AS has_mobile_app_tracking,
+    has_macropoint_tracking     AS has_macropoint_tracking,
+    has_edi_tracking            AS has_edi_tracking,
 
     -- load metadata
-    contracted_load             AS CONTRACTED_LOAD,
-    load_booked_autonomously    AS LOAD_BOOKED_AUTONOMOUSLY,
-    load_sourced_autonomously   AS LOAD_SOURCED_AUTONOMOUSLY,
-    load_was_cancelled          AS LOAD_WAS_CANCELLED,
-    vip_carrier                 AS VIP_CARRIER,
-    carrier_dropped_us_count    AS CARRIER_DROPPED_US_COUNT,
+    contracted_load             AS contracted_load,
+    load_booked_autonomously    AS load_booked_autonomously,
+    load_sourced_autonomously   AS load_sourced_autonomously,
+    load_was_cancelled          AS load_was_cancelled,
+    vip_carrier                 AS vip_carrier,
+    carrier_dropped_us_count    AS carrier_dropped_us_count,
 
     -- timestamps
-    quote_at                    AS QUOTE_AT,
-    booked_at                   AS BOOKED_AT,
-    sourced_at                  AS SOURCED_AT,
-    pickup_at                   AS PICKUP_AT,
-    delivered_at                AS DELIVERED_AT,
-    pickup_appointment_at       AS PICKUP_APPOINTMENT_AT,
-    delivery_appointment_at     AS DELIVERY_APPOINTMENT_AT,
+    quote_at                    AS quote_at,
+    booked_at                   AS booked_at,
+    sourced_at                  AS sourced_at,
+    pickup_at                   AS pickup_at,
+    delivered_at                AS delivered_at,
+    pickup_appointment_at       AS pickup_appointment_at,
+    delivery_appointment_at     AS delivery_appointment_at,
 
     -- lane / geo
-    lane_raw                    AS LANE_RAW,
-    pickup_city                 AS PICKUP_CITY,
-    pickup_state                AS PICKUP_STATE,
-    delivery_city               AS DELIVERY_CITY,
-    delivery_state              AS DELIVERY_STATE
+    lane_raw                    AS lane_raw,
+    pickup_city                 AS pickup_city,
+    pickup_state                AS pickup_state,
+    delivery_city               AS delivery_city,
+    delivery_state              AS delivery_state
 
 FROM joined

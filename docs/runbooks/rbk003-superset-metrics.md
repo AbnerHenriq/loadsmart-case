@@ -85,7 +85,7 @@ existing_names = {m["metric_name"] for m in metrics}
 new_metrics = [
     {
         "metric_name": "total_loads",
-        "expression": "COUNT(LOADSMART_ID)",
+        "expression": "COUNT(loadsmart_id)",
         "metric_type": "count",
         "verbose_name": "Total loads",
         "d3format": ",d",
@@ -93,7 +93,7 @@ new_metrics = [
     },
     {
         "metric_name": "cancellation_rate",
-        "expression": "SUM(CAST(LOAD_WAS_CANCELLED AS INT)) * 1.0 / COUNT(*)",
+        "expression": "SUM(CAST(load_was_cancelled AS INT)) * 1.0 / COUNT(*)",
         "metric_type": "expr",
         "verbose_name": "Cancellation rate",
         "d3format": ".1%",

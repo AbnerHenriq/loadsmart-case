@@ -11,17 +11,17 @@ import duckdb
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-# Export columns per PRD
+# Export columns per PRD (query uses mart snake_case; values = CSV header names)
 COLUMNS = {
-    "LOADSMART_ID": "loadsmart_id",
-    "SHIPPER_NAME": "shipper_name",
-    "DELIVERED_AT": "delivery_date",
-    "PICKUP_CITY": "pickup_city",
-    "PICKUP_STATE": "pickup_state",
-    "DELIVERY_CITY": "delivery_city",
-    "DELIVERY_STATE": "delivery_state",
-    "BOOK_PRICE": "book_price",
-    "CARRIER_NAME": "carrier_name",
+    "loadsmart_id": "loadsmart_id",
+    "shipper_name": "shipper_name",
+    "delivered_at": "delivery_date",
+    "pickup_city": "pickup_city",
+    "pickup_state": "pickup_state",
+    "delivery_city": "delivery_city",
+    "delivery_state": "delivery_state",
+    "book_price": "book_price",
+    "carrier_name": "carrier_name",
 }
 
 
@@ -29,9 +29,9 @@ def export(db_path, output_dir="data/exports"):
     con = duckdb.connect(db_path, read_only=True)
 
     max_date_raw = con.execute("""
-        SELECT MAX(DELIVERED_AT)
+        SELECT MAX(delivered_at)
         FROM main_mart.fct_shipments
-        WHERE LOAD_WAS_CANCELLED = false
+        WHERE load_was_cancelled = false
     """).fetchone()[0]
 
     if max_date_raw is None:
@@ -45,23 +45,23 @@ def export(db_path, output_dir="data/exports"):
 
     df = con.execute("""
         SELECT
-            f.LOADSMART_ID,
-            f.DELIVERED_AT,
-            f.PICKUP_CITY,
-            f.PICKUP_STATE,
-            f.DELIVERY_CITY,
-            f.DELIVERY_STATE,
-            f.BOOK_PRICE,
-            dc.carrier_name AS CARRIER_NAME,
-            ds.shipper_name AS SHIPPER_NAME
+            f.loadsmart_id,
+            f.delivered_at,
+            f.pickup_city,
+            f.pickup_state,
+            f.delivery_city,
+            f.delivery_state,
+            f.book_price,
+            dc.carrier_name AS carrier_name,
+            ds.shipper_name AS shipper_name
         FROM main_mart.fct_shipments f
-        LEFT JOIN main_mart.dim_carrier dc ON f.CARRIER_SK = dc.CARRIER_SK
-        LEFT JOIN main_mart.dim_shipper ds ON f.SHIPPER_SK = ds.SHIPPER_SK
+        LEFT JOIN main_mart.dim_carrier dc ON f.carrier_sk = dc.carrier_sk
+        LEFT JOIN main_mart.dim_shipper ds ON f.shipper_sk = ds.shipper_sk
         WHERE
-            f.DELIVERED_AT >= CAST(? AS DATE)
-            AND f.DELIVERED_AT < CAST(? AS DATE)
-            AND f.LOAD_WAS_CANCELLED = false
-        ORDER BY f.DELIVERED_AT
+            f.delivered_at >= CAST(? AS DATE)
+            AND f.delivered_at < CAST(? AS DATE)
+            AND f.load_was_cancelled = false
+        ORDER BY f.delivered_at
     """, [str(start), str(end)]).df()
 
     con.close()

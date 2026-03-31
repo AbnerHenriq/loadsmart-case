@@ -94,7 +94,7 @@ params = {
     "viz_type": "echarts_timeseries_bar",
     "datasource": f"{DATASET_ID}__table",
     "metrics": ["total_loads"],       # metric list
-    "x_axis": "DELIVERED_AT",         # datetime column for X axis
+    "x_axis": "delivered_at",         # datetime column for X axis
     "time_grain_sqla": "P1M",         # granularity: P1D=day, P1W=week, P1M=month
     "time_range": "No filter",
 }
@@ -238,7 +238,7 @@ print(f"Layout applied. URL: {BASE}/superset/dashboard/{dash_id}/")
 | Duplicate charts on re-run | Script creates new charts without checking | Query `/api/v1/chart/?q=...` before creating |
 | CSRF missing on PUT | Session does not keep cookies | Use `requests.Session()`, not standalone `requests.put()` |
 | "Item with key X is not registered" | Viz plugin not loaded in bundle | See viz type table above; use `table` for categories |
-| "Columns missing in dataset" | Column name lowercase, dataset uses UPPERCASE | Validate columns via `GET /api/v1/dataset/{id}` before creating charts |
+| "Columns missing in dataset" | Wrong column name vs dataset (typo or case) | Validate columns via `GET /api/v1/dataset/{id}` before creating charts |
 
 ---
 

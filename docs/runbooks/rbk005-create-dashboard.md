@@ -23,7 +23,7 @@ From the PRD, list:
 
 1. **What the dashboard should answer** — 3 to 5 concrete business questions.
 2. **Candidate metrics** — `snake_case` name, SQL expression using `fct_shipments` columns, format (`d3format`), and type (`count`, `sum`, `avg`, `expr`).
-3. **Analysis dimensions** — columns for grouping (e.g. `carrier_name`, `EQUIPMENT_TYPE`, `DELIVERED_AT`).
+3. **Analysis dimensions** — columns for grouping (e.g. `carrier_name`, `equipment_type`, `delivered_at`).
 4. **Chart types** — for each metric, which visualization fits best (KPI, time bar, donut, horizontal bar).
 
 Present this brainstorm to the user before continuing. Wait for approval.
@@ -42,9 +42,8 @@ cols = sorted([c["column_name"] for c in result.get("columns", [])])
 print("Available columns:", cols)
 ```
 
-> **Note:** Superset columns may be UPPERCASE (`LANE_RAW`, `PICKUP_STATE`,
-> `DELIVERED_AT`) even if the original SQL used lowercase. Always use the **exact**
-> name returned by the API — never assume case from the dbt model alone.
+> **Note:** Use the **exact** column name returned by `GET /api/v1/dataset/{id}` (this
+> project’s `mart/` models expose `snake_case`). Never assume names from memory alone.
 
 Compare each planned dimension column with the list above. If missing:
 - The column was not exposed on the virtual dataset → sync via `PUT /api/v1/dataset/{id}/refresh`
@@ -178,7 +177,7 @@ Use `POST /api/v1/chart/` for each chart. Minimum params by type:
     "viz_type": "echarts_timeseries_bar",
     "datasource": "1__table",
     "metrics": ["metric_name"],
-    "x_axis": "DELIVERED_AT",
+    "x_axis": "delivered_at",
     "time_grain_sqla": "P1M",
     "time_range": "No filter",
     "x_axis_time_format": "%b/%Y",
@@ -195,7 +194,7 @@ Use `POST /api/v1/chart/` for each chart. Minimum params by type:
     "viz_type": "table",
     "datasource": "1__table",
     "metrics": ["primary_metric", "secondary_metric"],
-    "groupby": ["DIM_COLUMN"],       # ← UPPERCASE as returned by API
+    "groupby": ["dim_column"],       # ← exact name as returned by API (here: snake_case)
     "time_range": "No filter",
     "row_limit": 10,
     "page_length": 10,

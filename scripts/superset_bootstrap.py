@@ -292,7 +292,7 @@ def kpi(metric: str, ds: str) -> dict:
 def bar(metrics: list, y_label: str, ds: str, color_scheme: str = "d3Category10",
         stack: bool = False, y_fmt: str = ",d") -> dict:
     return {"viz_type": "echarts_timeseries_bar", "datasource": ds, "metrics": metrics,
-            "x_axis": "DELIVERED_AT", "time_grain_sqla": "P1M", "time_range": "No filter",
+            "x_axis": "delivered_at", "time_grain_sqla": "P1M", "time_range": "No filter",
             "x_axis_title": "Month", "y_axis_title": y_label,
             "x_axis_time_format": "%b/%Y", "tooltipTimeFormat": "%b/%Y",
             "y_axis_format": y_fmt, "rich_tooltip": True,
@@ -304,7 +304,7 @@ def tbl(metrics: list, groupby: list, ds: str, row_limit: int = 10) -> dict:
     Use this instead of 'bar' or 'echarts_bar' — those plugins are NOT loaded in
     apache/superset:latest (6.0.1). The API accepts them (201) but the frontend throws
     'Item with key X is not registered' at render time.
-    groupby values must use the UPPERCASE column name from GET /api/v1/dataset/{id}."""
+    groupby values must match column names from GET /api/v1/dataset/{id} (mart uses snake_case)."""
     return {"viz_type": "table", "datasource": ds, "metrics": metrics,
             "groupby": groupby, "time_range": "No filter",
             "row_limit": row_limit, "page_length": row_limit}
