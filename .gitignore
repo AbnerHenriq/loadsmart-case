@@ -13,13 +13,13 @@ venv/
 *.duckdb
 *.duckdb.wal
 
-# ── Dados brutos e exports ────────────────────────────────
+# ── Raw data exports ───────────────────────────────────────
 data/exports/
-# Manter o CSV do desafio versionado (necessário para reprodução)
-# Se preferir não versionar, descomente a linha abaixo:
+# Keep the challenge CSV in git for reproducibility.
+# To stop versioning it, uncomment:
 # data/*.csv
 
-# ── Variáveis de ambiente / segredos ─────────────────────
+# ── Environment / secrets ────────────────────────────────
 .env
 .env.*
 !.env.example

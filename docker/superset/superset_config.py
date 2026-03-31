@@ -2,8 +2,8 @@
 Superset configuration for local development.
 
 - Metadata stored in SQLite (simple for local/demo).
-- DuckDB connection must be added manually via the UI after startup:
-    SQLAlchemy URI: duckdb:////opt/airflow/data/loadsmart.duckdb
+- DuckDB connection, datasets, and dashboards are created by scripts/superset_bootstrap.py
+  during make setup (docker-compose service superset-bootstrap).
 """
 
 import os
