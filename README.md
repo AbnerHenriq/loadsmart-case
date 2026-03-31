@@ -59,7 +59,7 @@ loadsmart_case/
 │       ├── rbk003-superset-metrics.md
 │       ├── rbk004-superset-dashboards.md
 │       └── rbk005-create-dashboard.md
-├── .env
+├── .env.example                       # template; copy to `.env` (not in git)
 └── requirements.txt
 ```
 
@@ -69,18 +69,35 @@ loadsmart_case/
 
 **Prerequisite:** Docker Desktop installed and running.
 
+**Environment file:** `.env` is not in the repository (secrets stay local). After cloning, copy the template once, then run setup:
+
 ```bash
 git clone <repo-url>
 cd loadsmart_case
+cp .env.example .env
 make setup
 ```
 
-This starts all containers, runs the data pipeline (ingest → dbt run → dbt test), and configures Superset automatically. When it finishes, open:
+The template includes **every variable Docker Compose needs** to start Airflow and Superset: Postgres credentials, Airflow Fernet/webserver keys, and **`SUPERSET_SECRET_KEY`** (Flask session signing — do not remove that line unless you replace it with another non-empty value). Only the **SMTP_** block at the bottom is optional (email export).
+
+You can edit `.env` later to rotate secrets or to enable SMTP for the monthly export (see [Monthly export by email](#monthly-export-by-email)). The values in `.env.example` are enough for a first local run.
+
+`make setup` starts all containers, runs the data pipeline (ingest → dbt run → dbt test), and configures Superset automatically. When it finishes, open:
 
 - **Superset:** [http://localhost:8088](http://localhost:8088) — login `admin` / `admin`
 - **Airflow:** [http://localhost:9090](http://localhost:9090) — login `admin` / `admin`
 
 Superset comes up with 6 dashboards, 48 metrics, and the DuckDB connection wired.
+
+### What each variable is for
+
+| Variable | Required for `make setup`? | Used by |
+| -------- | -------------------------- | ------- |
+| `POSTGRES_*` | Yes | Airflow metadata DB — must match the `postgres_meta` service in `docker-compose.yml` (used in `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN`). |
+| `AIRFLOW__CORE__FERNET_KEY` | Yes | Airflow — encrypts connections and sensitive config. |
+| `AIRFLOW__WEBSERVER__SECRET_KEY` | Yes | Airflow webserver session signing. |
+| `SUPERSET_SECRET_KEY` | Yes | Superset — Flask `SECRET_KEY` in `docker/superset/superset_config.py` (sessions, CSRF); Compose passes it to `superset`, `superset-init`, and `superset-mcp`. |
+| `SMTP_*` | No | `export_last_month` in Airflow and `scripts/export_last_month.py` (email only). |
 
 ### Other commands
 
@@ -146,7 +163,7 @@ SMTP variables are set.
 
 #### How to configure
 
-Edit `.env` and uncomment the SMTP lines:
+Ensure you have a `.env` file (`cp .env.example .env` on first clone). To send email, **uncomment and fill** the SMTP block at the bottom of `.env.example` in your `.env` (or add the same variables):
 
 ```env
 SMTP_HOST=smtp.gmail.com
@@ -155,6 +172,8 @@ SMTP_USER=you@gmail.com
 SMTP_PASSWORD=your-app-password-here
 SMTP_RECIPIENTS=recipient@example.com
 ```
+
+If those variables are missing or empty, the task still writes the CSV under `data/exports/`; only the email step is skipped.
 
 > Separate multiple recipients with a comma: `a@x.com,b@y.com`
 
@@ -189,8 +208,9 @@ Or re-trigger the `loadsmart_pipeline` DAG in Airflow — the `export_last_month
 
 #### How it works in Docker / Airflow
 
-Docker Compose reads `.env` automatically (`env_file: .env`), so uncomment the SMTP
-lines in `.env` and re-trigger the `loadsmart_pipeline` DAG.
+Docker Compose loads `.env` via `env_file: .env`. After you add or change SMTP
+variables, restart the stack (`docker compose up -d --build`) or at least re-trigger
+the `loadsmart_pipeline` DAG so the scheduler picks up the new environment.
 The `export_last_month` task runs automatically after `dbt_test`.
 
 ---
