@@ -30,7 +30,9 @@ help:
 setup: up wait-airflow trigger-pipeline wait-pipeline
 	@echo ""
 	@echo "  ✓ Pipeline concluído. O Superset está configurando os dashboards..."
-	@echo "  ✓ Acesse http://localhost:8088 em instantes (admin / admin)"
+	@echo ""
+	@echo "  → Superset : http://localhost:8088 (admin / admin)"
+	@echo "  → Airflow  : http://localhost:9090 (admin / admin)"
 	@echo ""
 
 # ── Docker ────────────────────────────────────────────────────────────────────
@@ -110,6 +112,16 @@ wait-pipeline:
 		echo "  [$$elapsed s] $$state$$detail"; \
 		if [ "$$state" = "success" ]; then \
 			echo "  ✓ Pipeline concluído com sucesso ($$elapsed s)"; \
+			latest_csv=$$(ls -t data/exports/*.csv 2>/dev/null | head -1); \
+			if [ -n "$$latest_csv" ]; then \
+				echo "  ✓ CSV exportado: $$latest_csv"; \
+			fi; \
+			smtp_user=$$(grep -E '^SMTP_USER=.+' .env 2>/dev/null | cut -d= -f2-); \
+			smtp_pass=$$(grep -E '^SMTP_PASSWORD=.+' .env 2>/dev/null | cut -d= -f2-); \
+			smtp_recip=$$(grep -E '^SMTP_RECIPIENTS=.+' .env 2>/dev/null | cut -d= -f2-); \
+			if [ -n "$$smtp_user" ] && [ -n "$$smtp_pass" ] && [ -n "$$smtp_recip" ]; then \
+				echo "  ✓ E-mail enviado para: $$smtp_recip"; \
+			fi; \
 			exit 0; \
 		elif [ "$$state" = "failed" ]; then \
 			echo "  ✗ Pipeline falhou. Logs: make logs-pipeline"; \
