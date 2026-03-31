@@ -1,29 +1,29 @@
-# Runbook — Criar e Copiar Datasets Virtuais no Superset via API
+# Runbook — Create and copy virtual Superset datasets via API
 
-## Contexto
+## Context
 
-Datasets no Superset podem ser **físicos** (apontam direto para uma tabela) ou
-**virtuais** (definidos por um SQL customizado). Datasets virtuais permitem JOINs,
-filtros fixos e transformações sem alterar o banco.
+Superset datasets can be **physical** (point directly to a table) or
+**virtual** (defined by custom SQL). Virtual datasets allow JOINs,
+fixed filters, and transformations without changing the database.
 
-Este runbook cobre:
-1. Listar e inspecionar datasets existentes
-2. Criar um dataset virtual do zero
-3. Copiar um dataset existente com um filtro adicional (ex: só cargas ativas)
+This runbook covers:
+1. List and inspect existing datasets
+2. Create a virtual dataset from scratch
+3. Copy an existing dataset with an extra filter (e.g. active loads only)
 
-Padrão descoberto empiricamente no Superset **6.0.1** com DuckDB.
-
----
-
-## Pré-requisitos
-
-- Superset rodando em `http://localhost:8088`
-- Banco de dados já conectado (ver conexão DuckDB no README)
-- Python com `requests` instalado
+Patterns discovered empirically on Superset **6.0.1** with DuckDB.
 
 ---
 
-## Autenticação
+## Prerequisites
+
+- Superset running at `http://localhost:8088`
+- Database already connected (see DuckDB connection in README)
+- Python with `requests` installed
+
+---
+
+## Authentication
 
 ```python
 import requests, json
@@ -42,46 +42,46 @@ session.headers.update({"X-CSRFToken": csrf_token, "Content-Type": "application/
 
 ---
 
-## 1. Listar datasets e identificar se são virtuais
+## 1. List datasets and detect virtual vs physical
 
 ```python
 r = session.get(f"{BASE}/api/v1/dataset/?q=(page_size:20)")
 for ds in r.json().get("result", []):
-    tipo = "virtual" if ds.get("sql") else "físico"
+    tipo = "virtual" if ds.get("sql") else "physical"
     print(f"id={ds['id']}  [{tipo}]  {ds['table_name']}  schema={ds.get('schema')}")
 ```
 
-Um dataset é **virtual** quando o campo `sql` está preenchido.
+A dataset is **virtual** when the `sql` field is set.
 
 ---
 
-## 2. Inspecionar um dataset completo
+## 2. Inspect a full dataset
 
 ```python
 r = session.get(f"{BASE}/api/v1/dataset/1")
 ds = r.json()["result"]
 
 print("SQL:", ds.get("sql"))
-print("Colunas:", [c["column_name"] for c in ds["columns"]])
-print("Métricas:", [m["metric_name"] for m in ds["metrics"]])
+print("Columns:", [c["column_name"] for c in ds["columns"]])
+print("Metrics:", [m["metric_name"] for m in ds["metrics"]])
 ```
 
 ---
 
-## 3. Criar dataset virtual do zero
+## 3. Create virtual dataset from scratch
 
 ```python
-# Descobrir o id do banco de dados
+# Discover database id
 r = session.get(f"{BASE}/api/v1/database/?q=(page_size:10)")
 for db in r.json()["result"]:
     print(f"id={db['id']}  {db['database_name']}")
 
-DATABASE_ID = 1  # ajuste conforme o id do DuckDB
+DATABASE_ID = 1  # adjust to DuckDB id
 
 r = session.post(f"{BASE}/api/v1/dataset/", json={
     "database": DATABASE_ID,
-    "table_name": "meu_dataset",
-    "schema": "loadsmart.main_mart",   # schema do banco (opcional)
+    "table_name": "my_dataset",
+    "schema": "loadsmart.main_mart",   # database schema (optional)
     "sql": """
         SELECT f.*, dc.carrier_name
         FROM main_mart.fct_shipments f
@@ -91,40 +91,40 @@ r = session.post(f"{BASE}/api/v1/dataset/", json={
 })
 
 new_id = r.json()["id"]
-print(f"Dataset criado: id={new_id}")
+print(f"Dataset created: id={new_id}")
 ```
 
-> **Atenção**: não enviar `columns` nem `metrics` no POST — o Superset retorna
-> `400 Unknown field`. Adicione-os depois via PUT (ver seção 5).
+> **Note:** do not send `columns` or `metrics` in POST — Superset returns
+> `400 Unknown field`. Add them later via PUT (see section 5).
 
 ---
 
-## 4. Copiar dataset existente com filtro adicional
+## 4. Copy existing dataset with extra filter
 
-Este é o padrão para criar uma "view filtrada" de um dataset já configurado,
-preservando todas as métricas.
+Pattern for a “filtered view” of an already configured dataset,
+preserving all metrics.
 
 ```python
-DATASET_ID = 1  # dataset original
+DATASET_ID = 1  # original dataset
 
-# 1. Buscar o original
+# 1. Fetch original
 ds = session.get(f"{BASE}/api/v1/dataset/{DATASET_ID}").json()["result"]
 
-# 2. Montar SQL com filtro adicional
-sql_filtrado = ds["sql"].rstrip().rstrip(";") + "\nWHERE f.load_was_cancelled = false"
-# Se o SQL original já tiver WHERE, use AND em vez de WHERE
+# 2. Build SQL with extra filter
+sql_filtered = ds["sql"].rstrip().rstrip(";") + "\nWHERE f.load_was_cancelled = false"
+# If original SQL already has WHERE, use AND instead of WHERE
 
-# 3. Criar novo dataset (sem colunas/métricas no POST)
+# 3. Create new dataset (no columns/metrics in POST)
 r = session.post(f"{BASE}/api/v1/dataset/", json={
     "database": ds["database"]["id"],
     "table_name": "fct_shipments_active",
     "schema": ds.get("schema"),
-    "sql": sql_filtrado,
+    "sql": sql_filtered,
 })
 new_id = r.json()["id"]
-print(f"Dataset criado: id={new_id}")
+print(f"Dataset created: id={new_id}")
 
-# 4. Copiar métricas do original
+# 4. Copy metrics from original
 ALLOWED_MET = {
     "metric_name", "expression", "metric_type", "verbose_name",
     "d3format", "description", "warning_text", "extra"
@@ -132,47 +132,47 @@ ALLOWED_MET = {
 metrics = [{k: v for k, v in m.items() if k in ALLOWED_MET} for m in ds["metrics"]]
 
 r = session.put(f"{BASE}/api/v1/dataset/{new_id}", json={"metrics": metrics})
-print(f"Métricas copiadas: {len(metrics)}")
+print(f"Metrics copied: {len(metrics)}")
 
-# 5. Sincronizar colunas (introspect)
+# 5. Sync columns (introspect)
 session.put(f"{BASE}/api/v1/dataset/{new_id}/refresh")
-print("Colunas sincronizadas")
+print("Columns synced")
 ```
 
 ---
 
-## 5. Adicionar métricas a um dataset existente
+## 5. Add metrics to an existing dataset
 
-Ver runbook `rbk003-superset-metrics.md` para o padrão completo.
-O campo-chave: sempre fazer GET das métricas existentes, filtrar para `ALLOWED_MET`,
-e enviar tudo junto no PUT (não apenas as novas).
+See runbook `rbk003-superset-metrics.md` for the full pattern.
+Key point: always GET existing metrics, filter to `ALLOWED_MET`,
+and send everything together in PUT (not only new ones).
 
 ---
 
-## Datasets neste projeto
+## Datasets in this project
 
-| id | Nome | Tipo | Filtro |
+| id | Name | Type | Filter |
 |----|------|------|--------|
-| 1 | `fct_shipments` | virtual | todas as cargas |
+| 1 | `fct_shipments` | virtual | all loads |
 | 2 | `fct_shipments_active` | virtual | `load_was_cancelled = false` |
 
-Para referenciar um dataset em params de chart, use `"{id}__table"`:
+To reference a dataset in chart params, use `"{id}__table"`:
 
 ```python
-# Dataset completo
+# Full dataset
 "datasource": "1__table"
 
-# Só cargas ativas
+# Active loads only
 "datasource": "2__table"
 ```
 
 ---
 
-## Armadilhas conhecidas
+## Known pitfalls
 
-| Armadilha | Causa | Fix |
-|-----------|-------|-----|
-| `400 — columns: Unknown field` | `columns`/`metrics` no payload do POST | Enviar só no PUT após criação |
-| Dataset criado mas sem colunas | Superset não faz introspect automático | Chamar `PUT /api/v1/dataset/{id}/refresh` |
-| SQL com subquery falha | DuckDB exige alias na subquery | `SELECT * FROM (SELECT ...) AS sub` |
-| Schema errado no DuckDB | DuckDB usa `schema.database` invertido vs Postgres | Usar `main_mart.tabela` diretamente no SQL, não no campo `schema` |
+| Pitfall | Cause | Fix |
+|---------|-------|-----|
+| `400 — columns: Unknown field` | `columns`/`metrics` in POST payload | Send only in PUT after creation |
+| Dataset created but no columns | Superset does not auto-introspect | Call `PUT /api/v1/dataset/{id}/refresh` |
+| SQL with subquery fails | DuckDB requires alias on subquery | `SELECT * FROM (SELECT ...) AS sub` |
+| Wrong schema in DuckDB | DuckDB uses `schema.database` inverted vs Postgres | Use `main_mart.table` directly in SQL, not the `schema` field |

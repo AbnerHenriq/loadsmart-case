@@ -3,41 +3,41 @@
 ## Stack
 
 
-| Componente       | Tecnologia             |
+| Component        | Technology             |
 | ---------------- | ---------------------- |
-| Data Warehouse   | DuckDB (arquivo local) |
-| Transformação    | dbt-core + dbt-duckdb  |
-| Orquestração     | Apache Airflow 2.9     |
-| Visualização     | Apache Superset        |
-| Análise / Export | Jupyter Notebook       |
-| Infraestrutura   | Docker Compose         |
+| Data warehouse   | DuckDB (local file)    |
+| Transformation   | dbt-core + dbt-duckdb  |
+| Orchestration    | Apache Airflow 2.9     |
+| Visualization    | Apache Superset        |
+| Analysis / export | Jupyter Notebook       |
+| Infrastructure   | Docker Compose         |
 
 
 ---
 
-## Pré-requisitos
+## Prerequisites
 
-- Docker Desktop (com Docker Compose v2)
-- Python 3.11+ (para rodar o dbt localmente, opcional)
+- Docker Desktop (with Docker Compose v2)
+- Python 3.11+ (to run dbt locally, optional)
 - Git
 
 ---
 
-## Estrutura do projeto
+## Project layout
 
 ```
 loadsmart_case/
 ├── Makefile                           # make setup / reset / teardown
 ├── docker-compose.yml                 # Airflow + Superset + DuckDB
 ├── docker/superset/
-│   ├── Dockerfile                     # Imagem com duckdb-engine instalado
+│   ├── Dockerfile                     # Image with duckdb-engine installed
 │   └── superset_config.py
 ├── data/
 │   └── 2026_data_challenge_ae_data.csv
 ├── scripts/
 │   ├── ingest.py                      # CSV → DuckDB raw.shipments
-│   ├── export_last_month.py           # Exportação mensal + envio por e-mail (opcional)
-│   └── superset_bootstrap.py          # Configura conexão, dataset, métricas e dashboards
+│   ├── export_last_month.py           # Monthly export + email (optional)
+│   └── superset_bootstrap.py          # Configures connection, dataset, metrics, dashboards
 ├── dbt/
 │   ├── dbt_project.yml
 │   ├── profiles.yml
@@ -65,9 +65,9 @@ loadsmart_case/
 
 ---
 
-## Como rodar o projeto
+## How to run the project
 
-**Pré-requisito:** Docker Desktop instalado e rodando.
+**Prerequisite:** Docker Desktop installed and running.
 
 ```bash
 git clone <repo-url>
@@ -75,27 +75,27 @@ cd loadsmart_case
 make setup
 ```
 
-Isso sobe todos os containers, executa o pipeline de dados (ingest → dbt run → dbt test) e configura o Superset automaticamente. Ao final, acesse:
+This starts all containers, runs the data pipeline (ingest → dbt run → dbt test), and configures Superset automatically. When it finishes, open:
 
 - **Superset:** [http://localhost:8088](http://localhost:8088) — login `admin` / `admin`
 - **Airflow:** [http://localhost:9090](http://localhost:9090) — login `admin` / `admin`
 
-O Superset abre com 6 dashboards, 48 métricas e a conexão com o DuckDB já configurados.
+Superset comes up with 6 dashboards, 48 metrics, and the DuckDB connection wired.
 
-### Outros comandos
+### Other commands
 
 ```bash
-make status      # estado dos containers e do último run do pipeline
-make reset       # derruba tudo e reconstrói do zero (teardown + setup)
-make teardown    # remove containers, volumes e imagens locais
-make open        # abre Airflow e Superset no navegador
-make logs-pipeline   # logs do pipeline de dados
-make logs-bootstrap  # logs da configuração automática do Superset
+make status      # container status and last pipeline run
+make reset       # tear down everything and rebuild from scratch (teardown + setup)
+make teardown    # remove containers, volumes, and local images
+make open        # open Airflow and Superset in the browser
+make logs-pipeline   # data pipeline logs
+make logs-bootstrap  # automatic Superset setup logs
 ```
 
-### Localmente (sem Docker)
+### Locally (without Docker)
 
-Crie um virtual environment para isolar as dependências do projeto:
+Create a virtual environment to isolate project dependencies:
 
 ```bash
 python3 -m venv .venv
@@ -105,10 +105,10 @@ source .venv/bin/activate       # Linux/macOS
 pip install -r requirements.txt
 ```
 
-Com o venv ativo, rode o pipeline:
+With the venv active, run the pipeline:
 
 ```bash
-# Ingestão
+# Ingestion
 python scripts/ingest.py
 
 # dbt
@@ -118,7 +118,7 @@ dbt run --profiles-dir .
 dbt test --profiles-dir .
 ```
 
-Para desativar o venv quando terminar:
+To deactivate the venv when done:
 
 ```bash
 deactivate
@@ -126,109 +126,109 @@ deactivate
 
 ### Jupyter Notebook
 
-Com o venv ativo:
+With the venv active:
 
 ```bash
 jupyter notebook notebooks/loadsmart_analysis.ipynb
 ```
 
-O notebook contém:
+The notebook includes:
 
-- `split_lane(lane)` — parseia `"City,ST -> City,ST"` em dict com pickup/delivery city e state
+- `split_lane(lane)` — parses `"City,ST -> City,ST"` into a dict with pickup/delivery city and state
 
 ---
 
-### Exportação mensal por e-mail
+### Monthly export by email
 
-O pipeline inclui uma task `export_last_month` que, ao final de cada execução,
-grava o CSV em `data/exports/deliveries_YYYY_MM.csv` e o envia por e-mail caso
-as variáveis SMTP estejam configuradas.
+The pipeline includes an `export_last_month` task that, at the end of each run,
+writes the CSV to `data/exports/deliveries_YYYY_MM.csv` and sends it by email when
+SMTP variables are set.
 
-#### Como configurar
+#### How to configure
 
-Edite o `.env` e descomente as linhas SMTP:
+Edit `.env` and uncomment the SMTP lines:
 
 ```env
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=seuemail@gmail.com
-SMTP_PASSWORD=sua-app-password-aqui
-SMTP_RECIPIENTS=destinatario@example.com
+SMTP_USER=you@gmail.com
+SMTP_PASSWORD=your-app-password-here
+SMTP_RECIPIENTS=recipient@example.com
 ```
 
-> Separe múltiplos destinatários por vírgula: `a@x.com,b@y.com`
+> Separate multiple recipients with a comma: `a@x.com,b@y.com`
 
-#### Como obter uma App Password do Gmail
+#### How to get a Gmail App Password
 
-O Gmail não aceita a senha da conta diretamente em conexões SMTP por aplicativo.
-Use uma **App Password** (senha de aplicativo):
+Gmail does not accept your account password directly for SMTP app connections.
+Use an **App Password**:
 
-1. Acesse [myaccount.google.com/security](https://myaccount.google.com/security)
-2. Ative a **verificação em duas etapas** (se ainda não estiver ativa)
-3. Volte em Segurança → **Senhas de app** (ou busque "App Passwords")
-4. Escolha app **Outros (nome personalizado)** → escreva `loadsmart` → **Gerar**
-5. Copie a senha de 16 caracteres gerada (sem espaços) e cole em `SMTP_PASSWORD`
+1. Go to [myaccount.google.com/security](https://myaccount.google.com/security)
+2. Turn on **2-Step Verification** (if not already enabled)
+3. Security → **App passwords** (or search “App Passwords”)
+4. Choose app **Other (custom name)** → type `loadsmart` → **Generate**
+5. Copy the 16-character password (no spaces) and paste it into `SMTP_PASSWORD`
 
-#### Como testar localmente (sem Docker)
+#### How to test locally (without Docker)
 
 ```bash
-# Exporte as vars na sessão do terminal
+# Export vars in the terminal session
 export SMTP_HOST=smtp.gmail.com
 export SMTP_PORT=587
-export SMTP_USER=seuemail@gmail.com
-export SMTP_PASSWORD=sua-app-password-aqui
-export SMTP_RECIPIENTS=destinatario@example.com
+export SMTP_USER=you@gmail.com
+export SMTP_PASSWORD=your-app-password-here
+export SMTP_RECIPIENTS=recipient@example.com
 export DUCKDB_PATH=data/loadsmart.duckdb
 
-# Rode o script diretamente
+# Run the script directly
 source .venv/bin/activate
 python scripts/export_last_month.py
 ```
 
-Ou re-triggar o DAG `loadsmart_pipeline` no Airflow — a task `export_last_month` cuida do envio automaticamente.
+Or re-trigger the `loadsmart_pipeline` DAG in Airflow — the `export_last_month` task handles sending.
 
-#### Como funciona no Docker / Airflow
+#### How it works in Docker / Airflow
 
-O Docker Compose lê o `.env` automaticamente (`env_file: .env`), então basta
-descomentar as linhas SMTP no `.env` e re-triggar o DAG `loadsmart_pipeline`.
-A task `export_last_month` roda automaticamente após `dbt_test`.
+Docker Compose reads `.env` automatically (`env_file: .env`), so uncomment the SMTP
+lines in `.env` and re-trigger the `loadsmart_pipeline` DAG.
+The `export_last_month` task runs automatically after `dbt_test`.
 
 ---
 
-## Explorando o DuckDB
+## Exploring DuckDB
 
-O arquivo de banco fica em `data/loadsmart.duckdb` após rodar o pipeline.
+The database file is `data/loadsmart.duckdb` after the pipeline runs.
 
-### Via terminal (CLI do DuckDB)
+### Via terminal (DuckDB CLI)
 
 ```bash
-# Instale o CLI se ainda não tiver
+# Install the CLI if you don’t have it
 brew install duckdb          # macOS
-# ou baixe em https://duckdb.org/docs/installation
+# or download from https://duckdb.org/docs/installation
 
 duckdb data/loadsmart.duckdb
 ```
 
-Comandos úteis dentro do CLI:
+Useful CLI commands:
 
 ```sql
--- Listar todos os schemas e tabelas
+-- List all schemas and tables
 SHOW ALL TABLES;
 
--- Ver estrutura de uma tabela
+-- Describe a table
 DESCRIBE main_mart.fct_shipments;
 
--- Explorar as primeiras linhas
+-- Explore first rows
 SELECT * FROM main_mart.fct_shipments LIMIT 10;
 SELECT * FROM main_mart.dim_carrier   LIMIT 10;
 SELECT * FROM main_mart.dim_location  LIMIT 10;
 SELECT * FROM main_mart.dim_date      LIMIT 5;
 
--- Sair
+-- Quit
 .quit
 ```
 
-### Via Python (com o venv ativo)
+### Via Python (venv active)
 
 ```python
 import duckdb
@@ -240,19 +240,21 @@ print(df)
 
 ### Via DBeaver
 
-1. Abra o DBeaver e clique em **New Database Connection**
-2. Selecione **DuckDB**
-  - Se não aparecer, vá em **Driver Manager → New** e adicione o driver JDBC do DuckDB
-  - Download do driver: [duckdb.org/docs/api/java](https://duckdb.org/docs/api/java)
-3. Em **Path**, aponte para o arquivo `data/loadsmart.duckdb` dentro do diretório do repositório
-4. Clique em **Test Connection** → **Finish**
-5. Na árvore de objetos, navegue em: `loadsmart.duckdb → main_mart → Tables`
+1. Open DBeaver and click **New Database Connection**
+2. Select **DuckDB**
+  - If it doesn’t appear, go to **Driver Manager → New** and add the DuckDB JDBC driver
+  - Driver download: [duckdb.org/docs/api/java](https://duckdb.org/docs/api/java)
+3. In **Path**, point to `data/loadsmart.duckdb` inside the repo directory
+4. Click **Test Connection** → **Finish**
+5. In the object tree, navigate: `loadsmart.duckdb → main_mart → Tables`
 
-> **Atenção:** DuckDB só permite **uma conexão de escrita por vez**. Se o Airflow ou o dbt estiver rodando com o arquivo aberto, o DBeaver pode se conectar em modo read-only. Encerre os outros processos antes de abrir no DBeaver se precisar editar dados.
+> **Note:** DuckDB allows **only one write connection at a time**. If Airflow or dbt
+> has the file open, DBeaver may connect read-only. Stop other processes before opening
+> in DBeaver if you need to edit data.
 
 ---
 
-## Modelo dimensional (Star Schema)
+## Dimensional model (star schema)
 
 ```
                     dim_date
@@ -266,211 +268,210 @@ print(df)
 ```
 
 
-| Tabela          | Schema       | Linhas | Descrição                                    |
-| --------------- | ------------ | ------ | -------------------------------------------- |
-| `raw.shipments` | raw          | 5.361  | Dados brutos do CSV                          |
-| `int_shipments` | intermediate | 5.357  | Deduplicado + métricas derivadas             |
-| `dim_carrier`   | mart         | 2.203  | Carriers únicos + sentinel "Unknown"         |
-| `dim_shipper`   | mart         | 94     | Shippers únicos                              |
-| `dim_location`  | mart         | 988    | Cidades/estados únicos (origem + destino)    |
-| `dim_date`      | mart         | 438    | Calendário cobrindo todo o período dos dados |
-| `fct_shipments` | mart         | 5.357  | Fato central — 1 linha por shipment          |
+| Table           | Schema       | Rows | Description                                      |
+| --------------- | ------------ | ---- | ------------------------------------------------ |
+| `raw.shipments` | raw          | 5,361 | Raw CSV data                                   |
+| `int_shipments` | intermediate | 5,357 | Deduplicated + derived metrics                   |
+| `dim_carrier`   | mart         | 2,203 | Unique carriers + “Unknown” sentinel           |
+| `dim_shipper`   | mart         | 94   | Unique shippers                                |
+| `dim_location`  | mart         | 988  | Unique cities/states (origin + destination)     |
+| `dim_date`      | mart         | 438  | Calendar covering the full data period          |
+| `fct_shipments` | mart         | 5,357 | Central fact — one row per shipment             |
 
 
-### Camadas dbt
+### dbt layers
 
 
-| Camada       | Materialização | Propósito                               |
-| ------------ | -------------- | --------------------------------------- |
-| staging      | view           | Limpeza, tipagem, parse do campo `lane` |
-| intermediate | table          | Deduplicação, métricas derivadas        |
-| mart         | table          | Dimensões e fato prontos para análise   |
+| Layer        | Materialization | Purpose                                      |
+| ------------ | --------------- | -------------------------------------------- |
+| staging      | view            | Cleanup, typing, parsing the `lane` field   |
+| intermediate | table           | Deduplication, derived metrics               |
+| mart         | table           | Dimensions and fact ready for analysis       |
 
 
 ---
 
-## Métricas e Dashboards (Superset)
+## Metrics and dashboards (Superset)
 
-Tudo configurado automaticamente pelo `superset_bootstrap.py` durante o `make setup`.
+All configured automatically by `superset_bootstrap.py` during `make setup`.
 
-### Dashboards disponíveis
+### Available dashboards
 
-| Dashboard | Audiência | Perguntas respondidas |
-|---|---|---|
-| Saúde Financeira | CFO / Pricing | PnL, margem, receita por milha |
-| Volume & Funil Operacional | Ops Manager | Volume, cancelamento, lead time |
-| Desempenho de Carrier | Ops Manager | On-time rates, drops, VIP carriers |
-| Autonomia Operacional | Produto | Booking/sourcing autônomo vs. intervenção humana |
-| Tracking & Visibilidade | Produto | Cobertura mobile, Macropoint, EDI |
-| SLA e Pontualidade por Lane | Operação | On-time por lane, transit time, ranking por estado |
+| Dashboard | Audience | Questions answered |
+|---------------------------|----------|---------------------|
+| Financial Health | CFO / Pricing | PnL, margin, revenue per mile |
+| Volume & Operational Funnel | Ops Manager | Volume, cancellation, lead time |
+| Carrier Performance | Ops Manager | On-time rates, drops, VIP carriers |
+| Operational Autonomy | Product | Autonomous booking/sourcing vs human touch |
+| Tracking & Visibility | Product | Mobile, Macropoint, EDI coverage |
+| SLA & On-Time by Lane | Operations | On-time by lane, transit time, ranking by state |
 
-### Métricas calculadas (48 total)
+### Calculated metrics (48 total)
 
-> **Regra:** nunca pré-calcular razões — sempre somar componentes antes de dividir.
+> **Rule:** never pre-compute ratios — always sum components before dividing.
 
-#### Domínio 1 — Financeiro
-
-
-| Métrica            | Label                 | Domínio    | Owner         | Expressão SQL                      |
-| ------------------ | --------------------- | ---------- | ------------- | ---------------------------------- |
-| `total_revenue`    | Receita total         | Financeiro | CFO / Pricing | `SUM(book_price)`                  |
-| `total_cost`       | Custo total           | Financeiro | CFO / Pricing | `SUM(source_price)`                |
-| `total_pnl`        | PnL total             | Financeiro | CFO / Pricing | `SUM(pnl)`                         |
-| `avg_book_price`   | Book price médio      | Financeiro | CFO / Pricing | `AVG(book_price)`                  |
-| `avg_pnl`          | PnL médio             | Financeiro | CFO / Pricing | `AVG(pnl)`                         |
-| `total_mileage`    | Mileage total         | Financeiro | CFO / Pricing | `SUM(mileage)`                     |
-| `avg_mileage`      | Mileage médio         | Financeiro | CFO / Pricing | `AVG(mileage)`                     |
-| `margin_pct`       | Margem %              | Financeiro | CFO / Pricing | `SUM(pnl) / SUM(book_price)`       |
-| `cost_per_mile`    | Custo por milha       | Financeiro | CFO / Pricing | `SUM(source_price) / SUM(mileage)` |
-| `revenue_per_mile` | Receita por milha     | Financeiro | CFO / Pricing | `SUM(book_price) / SUM(mileage)`   |
-| `pnl_per_mile`     | PnL por milha         | Financeiro | CFO / Pricing | `SUM(pnl) / SUM(mileage)`          |
-| `spread_price`     | Spread book vs source | Financeiro | CFO / Pricing | `AVG(book_price - source_price)`   |
+#### Domain 1 — Financial
 
 
-#### Domínio 2 — Volume e Funil
+| Metric             | Label                 | Domain   | Owner         | SQL expression                      |
+| ------------------ | --------------------- | -------- | ------------- | ---------------------------------- |
+| `total_revenue`    | Total revenue         | Financial | CFO / Pricing | `SUM(book_price)`                  |
+| `total_cost`       | Total cost            | Financial | CFO / Pricing | `SUM(source_price)`                |
+| `total_pnl`        | Total PnL             | Financial | CFO / Pricing | `SUM(pnl)`                         |
+| `avg_book_price`   | Avg book price        | Financial | CFO / Pricing | `AVG(book_price)`                  |
+| `avg_pnl`          | Avg PnL               | Financial | CFO / Pricing | `AVG(pnl)`                         |
+| `total_mileage`    | Total mileage         | Financial | CFO / Pricing | `SUM(mileage)`                     |
+| `avg_mileage`      | Avg mileage           | Financial | CFO / Pricing | `AVG(mileage)`                     |
+| `margin_pct`       | Margin %              | Financial | CFO / Pricing | `SUM(pnl) / SUM(book_price)`       |
+| `cost_per_mile`    | Cost per mile         | Financial | CFO / Pricing | `SUM(source_price) / SUM(mileage)` |
+| `revenue_per_mile` | Revenue per mile      | Financial | CFO / Pricing | `SUM(book_price) / SUM(mileage)`   |
+| `pnl_per_mile`     | PnL per mile          | Financial | CFO / Pricing | `SUM(pnl) / SUM(mileage)`          |
+| `spread_price`     | Book vs source spread | Financial | CFO / Pricing | `AVG(book_price - source_price)`   |
 
 
-| Métrica                  | Label                           | Domínio        | Owner       | Expressão SQL                                   |
-| ------------------------ | ------------------------------- | -------------- | ----------- | ----------------------------------------------- |
-| `total_loads`            | Total de cargas                 | Volume / Funil | Ops Manager | `COUNT(loadsmart_id)`                           |
-| `cancelled_loads`        | Cargas canceladas               | Volume / Funil | Ops Manager | `SUM(load_was_cancelled::int)`                  |
-| `active_loads`           | Cargas ativas                   | Volume / Funil | Ops Manager | `SUM((NOT load_was_cancelled)::int)`            |
-| `contracted_loads`       | Cargas contratadas              | Volume / Funil | Ops Manager | `SUM(contracted_load::int)`                     |
-| `cancellation_rate`      | Taxa de cancelamento            | Volume / Funil | Ops Manager | `SUM(load_was_cancelled::int) * 1.0 / COUNT(*)` |
-| `contracted_load_rate`   | % cargas contratadas            | Volume / Funil | Produto     | `SUM(contracted_load::int) * 1.0 / COUNT(*)`    |
-| `avg_lead_time_booking`  | Lead time quote → book (horas)  | Volume / Funil | Produto     | `AVG(datediff('hour', quote_at, booked_at))`    |
-| `avg_lead_time_sourcing` | Lead time book → source (horas) | Volume / Funil | Produto     | `AVG(datediff('hour', booked_at, sourced_at))`  |
-| `avg_transit_days`       | Transit time médio (dias)       | Volume / Funil | Ops Manager | `AVG(datediff('day', pickup_at, delivered_at))` |
+#### Domain 2 — Volume and funnel
 
 
-#### Domínio 3 — Performance de Carrier
+| Metric                   | Label                           | Domain        | Owner       | SQL expression                                   |
+| ------------------------ | ------------------------------- | ------------- | ----------- | ----------------------------------------------- |
+| `total_loads`            | Total loads                     | Volume / Funnel | Ops Manager | `COUNT(loadsmart_id)`                           |
+| `cancelled_loads`        | Cancelled loads                 | Volume / Funnel | Ops Manager | `SUM(load_was_cancelled::int)`                  |
+| `active_loads`           | Active loads                    | Volume / Funnel | Ops Manager | `SUM((NOT load_was_cancelled)::int)`            |
+| `contracted_loads`       | Contracted loads                | Volume / Funnel | Ops Manager | `SUM(contracted_load::int)`                     |
+| `cancellation_rate`      | Cancellation rate               | Volume / Funnel | Ops Manager | `SUM(load_was_cancelled::int) * 1.0 / COUNT(*)` |
+| `contracted_load_rate`   | % contracted loads              | Volume / Funnel | Product     | `SUM(contracted_load::int) * 1.0 / COUNT(*)`    |
+| `avg_lead_time_booking`  | Lead time quote → book (hours)  | Volume / Funnel | Product     | `AVG(datediff('hour', quote_at, booked_at))`    |
+| `avg_lead_time_sourcing` | Lead time book → source (hours) | Volume / Funnel | Product     | `AVG(datediff('hour', booked_at, sourced_at))`  |
+| `avg_transit_days`       | Avg transit time (days)         | Volume / Funnel | Ops Manager | `AVG(datediff('day', pickup_at, delivered_at))` |
 
 
-| Métrica                  | Label                          | Domínio | Owner       | Expressão SQL                                                                                    |
+#### Domain 3 — Carrier performance
+
+
+| Metric                   | Label                          | Domain  | Owner       | SQL expression                                                                                    |
 | ------------------------ | ------------------------------ | ------- | ----------- | ------------------------------------------------------------------------------------------------ |
-| `on_time_pickup_count`   | Coletas on-time (contagem)     | Carrier | Ops Manager | `SUM(carrier_on_time_to_pickup::int)`                                                            |
-| `on_time_delivery_count` | Entregas on-time (contagem)    | Carrier | Ops Manager | `SUM(carrier_on_time_to_delivery::int)`                                                          |
-| `on_time_overall_count`  | On-time geral (contagem)       | Carrier | Ops Manager | `SUM(carrier_on_time_overall::int)`                                                              |
-| `total_carrier_drops`    | Total de drops                 | Carrier | Ops Manager | `SUM(carrier_dropped_us_count)`                                                                  |
-| `vip_carrier_loads`      | Cargas com VIP carrier         | Carrier | Ops Manager | `SUM(vip_carrier::int)`                                                                          |
+| `on_time_pickup_count`   | On-time pickups (count)        | Carrier | Ops Manager | `SUM(carrier_on_time_to_pickup::int)`                                                            |
+| `on_time_delivery_count` | On-time deliveries (count)     | Carrier | Ops Manager | `SUM(carrier_on_time_to_delivery::int)`                                                          |
+| `on_time_overall_count`  | On-time overall (count)        | Carrier | Ops Manager | `SUM(carrier_on_time_overall::int)`                                                              |
+| `total_carrier_drops`    | Total drops                    | Carrier | Ops Manager | `SUM(carrier_dropped_us_count)`                                                                  |
+| `vip_carrier_loads`      | Loads with VIP carrier         | Carrier | Ops Manager | `SUM(vip_carrier::int)`                                                                          |
 | `on_time_pickup_rate`    | On-time to pickup %            | Carrier | Ops Manager | `SUM(carrier_on_time_to_pickup::int) * 1.0 / COUNT(*)`                                           |
 | `on_time_delivery_rate`  | On-time to delivery %          | Carrier | Ops Manager | `SUM(carrier_on_time_to_delivery::int) * 1.0 / COUNT(*)`                                         |
 | `on_time_overall_rate`   | On-time overall %              | Carrier | Ops Manager | `SUM(carrier_on_time_overall::int) * 1.0 / COUNT(*)`                                             |
-| `avg_drops_per_carrier`  | Média de drops por carrier     | Carrier | Ops Manager | `SUM(carrier_dropped_us_count) * 1.0 / COUNT(*)`                                                 |
-| `vip_carrier_rate`       | % cargas com VIP carrier       | Carrier | Ops Manager | `SUM(vip_carrier::int) * 1.0 / COUNT(*)`                                                         |
-| `on_time_delta`          | Gap pickup vs delivery on-time | Carrier | Ops Manager | `(SUM(carrier_on_time_to_pickup::int) - SUM(carrier_on_time_to_delivery::int)) * 1.0 / COUNT(*)` |
+| `avg_drops_per_carrier`  | Avg drops per carrier          | Carrier | Ops Manager | `SUM(carrier_dropped_us_count) * 1.0 / COUNT(*)`                                                 |
+| `vip_carrier_rate`       | % loads with VIP carrier       | Carrier | Ops Manager | `SUM(vip_carrier::int) * 1.0 / COUNT(*)`                                                         |
+| `on_time_delta`          | Pickup vs delivery on-time gap | Carrier | Ops Manager | `(SUM(carrier_on_time_to_pickup::int) - SUM(carrier_on_time_to_delivery::int)) * 1.0 / COUNT(*)` |
 
 
-#### Domínio 4 — Autonomia Operacional
+#### Domain 4 — Operational autonomy
 
 
-| Métrica                    | Label                        | Domínio   | Owner   | Expressão SQL                                                                               |
+| Metric                     | Label                        | Domain    | Owner   | SQL expression                                                                               |
 | -------------------------- | ---------------------------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
-| `autonomously_booked`      | Bookings autônomos           | Automação | Produto | `SUM(load_booked_autonomously::int)`                                                        |
-| `autonomously_sourced`     | Sourcings autônomos          | Automação | Produto | `SUM(load_sourced_autonomously::int)`                                                       |
-| `fully_autonomous_loads`   | Cargas 100% autônomas        | Automação | Produto | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int)`                        |
-| `autonomous_booking_rate`  | Taxa de booking autônomo %   | Automação | Produto | `SUM(load_booked_autonomously::int) * 1.0 / COUNT(*)`                                       |
-| `autonomous_sourcing_rate` | Taxa de sourcing autônomo %  | Automação | Produto | `SUM(load_sourced_autonomously::int) * 1.0 / COUNT(*)`                                      |
-| `fully_autonomous_rate`    | Taxa 100% autônoma %         | Automação | Produto | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)`       |
-| `human_intervention_rate`  | Taxa de intervenção humana % | Automação | Produto | `1.0 - SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)` |
+| `autonomously_booked`      | Autonomous bookings          | Automation | Product | `SUM(load_booked_autonomously::int)`                                                        |
+| `autonomously_sourced`     | Autonomous sourcings         | Automation | Product | `SUM(load_sourced_autonomously::int)`                                                       |
+| `fully_autonomous_loads`   | 100% autonomous loads        | Automation | Product | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int)`                        |
+| `autonomous_booking_rate`  | Autonomous booking rate %    | Automation | Product | `SUM(load_booked_autonomously::int) * 1.0 / COUNT(*)`                                       |
+| `autonomous_sourcing_rate` | Autonomous sourcing rate %   | Automation | Product | `SUM(load_sourced_autonomously::int) * 1.0 / COUNT(*)`                                      |
+| `fully_autonomous_rate`    | 100% autonomous rate %       | Automation | Product | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)`       |
+| `human_intervention_rate`  | Human intervention rate %    | Automation | Product | `1.0 - SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)` |
 
 
-#### Domínio 5 — Tracking e Visibilidade
+#### Domain 5 — Tracking and visibility
 
 
-| Métrica                    | Label                         | Domínio  | Owner   | Expressão SQL                                                                                               |
+| Metric                     | Label                         | Domain   | Owner   | SQL expression                                                                                               |
 | -------------------------- | ----------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| `mobile_tracked`           | Cargas com mobile tracking    | Tracking | Produto | `SUM(has_mobile_app_tracking::int)`                                                                         |
-| `macropoint_tracked`       | Cargas com Macropoint         | Tracking | Produto | `SUM(has_macropoint_tracking::int)`                                                                         |
-| `edi_tracked`              | Cargas com EDI                | Tracking | Produto | `SUM(has_edi_tracking::int)`                                                                                |
-| `any_tracked`              | Cargas com algum tracking     | Tracking | Produto | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int)`                        |
-| `mobile_tracking_rate`     | Cobertura mobile app %        | Tracking | Produto | `SUM(has_mobile_app_tracking::int) * 1.0 / COUNT(*)`                                                        |
-| `macropoint_tracking_rate` | Cobertura Macropoint %        | Tracking | Produto | `SUM(has_macropoint_tracking::int) * 1.0 / COUNT(*)`                                                        |
-| `edi_tracking_rate`        | Cobertura EDI %               | Tracking | Produto | `SUM(has_edi_tracking::int) * 1.0 / COUNT(*)`                                                               |
-| `total_tracking_coverage`  | Cobertura total de tracking % | Tracking | Produto | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)`       |
-| `blind_shipment_rate`      | Cargas sem nenhum tracking %  | Tracking | Produto | `1.0 - SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)` |
+| `mobile_tracked`           | Loads with mobile tracking    | Tracking | Product | `SUM(has_mobile_app_tracking::int)`                                                                         |
+| `macropoint_tracked`       | Loads with Macropoint         | Tracking | Product | `SUM(has_macropoint_tracking::int)`                                                                         |
+| `edi_tracked`              | Loads with EDI                | Tracking | Product | `SUM(has_edi_tracking::int)`                                                                                |
+| `any_tracked`              | Loads with any tracking       | Tracking | Product | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int)`                        |
+| `mobile_tracking_rate`     | Mobile app coverage %         | Tracking | Product | `SUM(has_mobile_app_tracking::int) * 1.0 / COUNT(*)`                                                        |
+| `macropoint_tracking_rate` | Macropoint coverage %         | Tracking | Product | `SUM(has_macropoint_tracking::int) * 1.0 / COUNT(*)`                                                        |
+| `edi_tracking_rate`        | EDI coverage %                | Tracking | Product | `SUM(has_edi_tracking::int) * 1.0 / COUNT(*)`                                                               |
+| `total_tracking_coverage`  | Total tracking coverage %     | Tracking | Product | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)`       |
+| `blind_shipment_rate`      | Loads with no tracking %      | Tracking | Product | `1.0 - SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)` |
 
 
-### Dashboard 1 — Saúde operacional
+### Dashboard 1 — Operational health
 
-**Audiência:** ops manager · **Pergunta:** alguma coisa quebrou?
+**Audience:** ops manager · **Question:** did something break?
 
 
-| Chart                      | Tipo           | Métrica(s)                                     | Dimensão              |
+| Chart                      | Type           | Metric(s)                                     | Dimension              |
 | -------------------------- | -------------- | ---------------------------------------------- | --------------------- |
 | On-time rate               | KPI            | `on_time_overall_rate`                         | —                     |
-| Total de cargas            | KPI            | `COUNT(loadsmart_id)`                          | —                     |
-| Transit time médio         | KPI            | `AVG(lead_time_days)`                          | —                     |
-| Taxa de cancelamento       | KPI            | `cancellation_rate`                            | —                     |
-| On-time rate por carrier   | Bar horizontal | `on_time_overall_rate`                         | `carrier_name`        |
-| Evolução on-time mensal    | Line           | `on_time_overall_rate`                         | mês de `delivered_at` |
-| Mix por equipment type     | Donut          | `COUNT(*)`                                     | `equipment_type`      |
-| Pickup vs delivery on-time | Bar agrupado   | `on_time_pickup_rate`, `on_time_delivery_rate` | `carrier_name`        |
+| Total loads                | KPI            | `COUNT(loadsmart_id)`                          | —                     |
+| Avg transit time           | KPI            | `AVG(lead_time_days)`                          | —                     |
+| Cancellation rate          | KPI            | `cancellation_rate`                            | —                     |
+| On-time rate by carrier    | Horizontal bar | `on_time_overall_rate`                         | `carrier_name`        |
+| Monthly on-time trend      | Line           | `on_time_overall_rate`                         | month of `delivered_at` |
+| Mix by equipment type      | Donut          | `COUNT(*)`                                     | `equipment_type`      |
+| Pickup vs delivery on-time | Grouped bar    | `on_time_pickup_rate`, `on_time_delivery_rate` | `carrier_name`        |
 
 
-### Dashboard 2 — Saúde financeira
+### Dashboard 2 — Financial health
 
-**Audiência:** CFO / pricing analyst · **Pergunta:** onde ganhamos e perdemos?
+**Audience:** CFO / pricing analyst · **Question:** where do we profit and lose?
 
 
-| Chart                        | Tipo           | Métrica(s)               | Dimensão              |
+| Chart                        | Type           | Metric(s)               | Dimension              |
 | ---------------------------- | -------------- | ------------------------ | --------------------- |
-| PnL total                    | KPI            | `SUM(pnl)`               | —                     |
-| Margem %                     | KPI            | `margin_pct`             | —                     |
-| Custo por milha              | KPI            | `cost_per_mile`          | —                     |
-| Book price médio             | KPI            | `AVG(book_price)`        | —                     |
-| Margem por sourcing channel  | Bar horizontal | `margin_pct`             | `sourcing_channel`    |
-| PnL por shipper (top 10)     | Bar horizontal | `SUM(pnl)`               | `shipper_name`        |
+| Total PnL                    | KPI            | `SUM(pnl)`               | —                     |
+| Margin %                     | KPI            | `margin_pct`             | —                     |
+| Cost per mile                | KPI            | `cost_per_mile`          | —                     |
+| Avg book price               | KPI            | `AVG(book_price)`        | —                     |
+| Margin by sourcing channel   | Horizontal bar | `margin_pct`             | `sourcing_channel`    |
+| PnL by shipper (top 10)      | Horizontal bar | `SUM(pnl)`               | `shipper_name`        |
 | Mileage vs PnL               | Scatter        | `pnl_per_mile`           | `carrier_name`        |
-| Evolução PnL e margem mensal | Line           | `SUM(pnl)`, `margin_pct` | mês de `delivered_at` |
+| Monthly PnL and margin trend | Line           | `SUM(pnl)`, `margin_pct` | month of `delivered_at` |
 
 
-### Dashboard 3 — Eficiência & Autonomia
+### Dashboard 3 — Efficiency & autonomy
 
-**Audiência:** produto / liderança · **Pergunta:** a automação está evoluindo?
+**Audience:** product / leadership · **Question:** is automation improving?
 
 
-| Chart                          | Tipo           | Métrica(s)                                                             | Dimensão              |
+| Chart                          | Type           | Metric(s)                                                             | Dimension              |
 | ------------------------------ | -------------- | ---------------------------------------------------------------------- | --------------------- |
-| Taxa 100% autônoma             | KPI            | `fully_autonomous_rate`                                                | —                     |
-| Cobertura de tracking          | KPI            | `total_tracking_coverage`                                              | —                     |
-| % cargas VIP carrier           | KPI            | `vip_carrier_rate`                                                     | —                     |
-| Cargas sem tracking            | KPI            | `blind_shipment_rate`                                                  | —                     |
-| Autonomia por canal            | Bar horizontal | `fully_autonomous_rate`                                                | `sourcing_channel`    |
-| Cobertura por tipo de tracking | Bar agrupado   | `mobile/macropoint/edi_rate`                                           | —                     |
-| Evolução autonomia mensal      | Line           | `fully_autonomous_rate`                                                | mês de `delivered_at` |
-| Carriers ranqueados            | Tabela         | `on_time_overall_rate`, `fully_autonomous_rate`, `blind_shipment_rate` | `carrier_name`        |
+| 100% autonomous rate           | KPI            | `fully_autonomous_rate`                                                | —                     |
+| Tracking coverage              | KPI            | `total_tracking_coverage`                                              | —                     |
+| % VIP carrier loads            | KPI            | `vip_carrier_rate`                                                     | —                     |
+| Loads without tracking         | KPI            | `blind_shipment_rate`                                                  | —                     |
+| Autonomy by channel            | Horizontal bar | `fully_autonomous_rate`                                                | `sourcing_channel`    |
+| Coverage by tracking type      | Grouped bar    | `mobile/macropoint/edi_rate`                                           | —                     |
+| Monthly autonomy trend         | Line           | `fully_autonomous_rate`                                                | month of `delivered_at` |
+| Ranked carriers                | Table          | `on_time_overall_rate`, `fully_autonomous_rate`, `blind_shipment_rate` | `carrier_name`        |
 
 
 ---
 
-## Qualidade dos dados
+## Data quality
 
-Os achados de qualidade encontrados na camada raw estão documentados em
+Quality findings for the raw layer are documented in
 [docs/analysis/raw-data-findings.md](docs/analysis/raw-data-findings.md).
 
-Resumo dos principais pontos:
+Summary of main points:
 
 
-| Achado                                              | Linhas | Severidade |
-| --------------------------------------------------- | ------ | ---------- |
-| Coluna `has_mobile_app_tracking` duplicada no CSV   | todas  | Alta       |
-| `pnl` inconsistente com `book_price - source_price` | 24     | Alta       |
-| `delivered_at` anterior a `pickup_at`               | 467    | Alta       |
-| `loadsmart_id` duplicado (linhas idênticas)         | 8      | Média      |
-| `carrier_name` nulo (maioria canceladas)            | 499    | Média      |
-| `mileage = 0` em cargas não canceladas              | 45     | Média      |
+| Finding                                              | Rows | Severity |
+| ---------------------------------------------------- | ---- | ---------- |
+| Duplicate `has_mobile_app_tracking` column in CSV   | all  | High       |
+| `pnl` inconsistent with `book_price - source_price` | 24   | High       |
+| `delivered_at` before `pickup_at`                     | 467  | High       |
+| Duplicate `loadsmart_id` (identical rows)           | 8    | Medium     |
+| Null `carrier_name` (mostly cancelled)              | 499  | Medium     |
+| `mileage = 0` on non-cancelled loads                | 45   | Medium     |
 
 
-Os testes dbt estão configurados como `warn` (não bloqueantes) para os achados
-conhecidos, permitindo que o pipeline rode enquanto os problemas são investigados.
+dbt tests are set to `warn` (non-blocking) for known findings so the pipeline can run
+while issues are investigated.
 
 ---
 
-## Parar e resetar o ambiente
+## Stop and reset the environment
 
 ```bash
-make teardown    # para e remove containers, volumes e imagens locais
-make reset       # teardown + setup completo (útil para recomeçar do zero)
+make teardown    # stop and remove containers, volumes, and local images
+make reset       # teardown + full setup (useful for a clean slate)
 ```
-

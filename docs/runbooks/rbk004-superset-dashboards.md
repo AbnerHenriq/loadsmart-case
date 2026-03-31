@@ -1,41 +1,41 @@
-# Runbook — Criar Dashboards no Superset via API
+# Runbook — Create Superset dashboards via API
 
-## Contexto
+## Context
 
-Dashboards no Superset são compostos por **charts** (visualizações) organizados em um
-layout de grid. Este runbook documenta o fluxo completo descoberto na versão **6.0.1**.
-
----
-
-## Pré-requisitos
-
-- Superset rodando em `http://localhost:8088`
-- Dataset criado com as métricas necessárias (ver `rbk003-superset-metrics.md`)
-- Python com `requests` instalado
+Superset dashboards are composed of **charts** (visualizations) organized in a
+grid layout. This runbook documents the full flow discovered on **6.0.1**.
 
 ---
 
-## Fluxo em 4 etapas
+## Prerequisites
+
+- Superset running at `http://localhost:8088`
+- Dataset created with required metrics (see `rbk003-superset-metrics.md`)
+- Python with `requests` installed
+
+---
+
+## Flow in 4 steps
 
 ```
-1. Autenticar (Bearer + CSRF)
+1. Authenticate (Bearer + CSRF)
         ↓
-2. Criar charts (POST /api/v1/chart/)
+2. Create charts (POST /api/v1/chart/)
         ↓
-3. Criar dashboard vazio (POST /api/v1/dashboard/)
+3. Create empty dashboard (POST /api/v1/dashboard/)
         ↓
-4. Vincular charts → dashboard (PUT /api/v1/chart/{id})
+4. Link charts → dashboard (PUT /api/v1/chart/{id})
         ↓
-5. Aplicar layout (PUT /api/v1/dashboard/{id} com position_json)
+5. Apply layout (PUT /api/v1/dashboard/{id} with position_json)
 ```
 
-> **Armadilha crítica:** charts NÃO se vinculam ao dashboard pelo `position_json`.
-> O vínculo é feito via PUT no **chart** com `{"dashboards": [dash_id]}`.
-> Sem isso, o dashboard exibe: *"There is no chart definition associated with this component"*.
+> **Critical pitfall:** charts are NOT linked to the dashboard via `position_json`.
+> The link is done via PUT on the **chart** with `{"dashboards": [dash_id]}`.
+> Without it, the dashboard shows: *"There is no chart definition associated with this component"*.
 
 ---
 
-## Autenticação (igual ao runbook de métricas)
+## Authentication (same as metrics runbook)
 
 ```python
 import requests, json
@@ -55,7 +55,7 @@ session.headers.update({"X-CSRFToken": csrf_token, "Content-Type": "application/
 
 ---
 
-## Etapa 2 — Criar charts
+## Step 2 — Create charts
 
 ```python
 DATASET_ID = 1
@@ -69,38 +69,38 @@ def create_chart(title, viz_type, params):
         "params": json.dumps(params),
         "description": "",
     })
-    assert r.status_code == 201, f"Erro ao criar chart '{title}': {r.text}"
+    assert r.status_code == 201, f"Error creating chart '{title}': {r.text}"
     cid = r.json()["id"]
     print(f"  ✓ [{cid}] {title}")
     return cid
 ```
 
-### Tipos de chart e seus params mínimos
+### Chart types and minimum params
 
 **KPI — `big_number_total`**
 ```python
 params = {
     "viz_type": "big_number_total",
     "datasource": f"{DATASET_ID}__table",
-    "metric": "total_loads",          # nome da métrica
-    "subheader": "no período",        # texto abaixo do número
+    "metric": "total_loads",          # metric name
+    "subheader": "in period",        # text below number
     "time_range": "No filter",
 }
 ```
 
-**Barra temporal — `echarts_timeseries_bar`**
+**Time bar — `echarts_timeseries_bar`**
 ```python
 params = {
     "viz_type": "echarts_timeseries_bar",
     "datasource": f"{DATASET_ID}__table",
-    "metrics": ["total_loads"],       # lista de métricas
-    "x_axis": "DELIVERED_AT",         # coluna datetime para o eixo X
-    "time_grain_sqla": "P1M",         # granularidade: P1D=dia, P1W=semana, P1M=mês
+    "metrics": ["total_loads"],       # metric list
+    "x_axis": "DELIVERED_AT",         # datetime column for X axis
+    "time_grain_sqla": "P1M",         # granularity: P1D=day, P1W=week, P1M=month
     "time_range": "No filter",
 }
 ```
 
-**Barra horizontal — `bar`**
+**Horizontal bar — `bar`**
 ```python
 params = {
     "viz_type": "bar",
@@ -126,44 +126,44 @@ params = {
 
 ---
 
-## Etapa 3 — Criar dashboard vazio
+## Step 3 — Create empty dashboard
 
 ```python
 r = session.post(f"{BASE}/api/v1/dashboard/", json={
-    "dashboard_title": "Volume & Funil Operacional",
+    "dashboard_title": "Volume & Operational Funnel",
     "published": True,
-    "slug": "volume-funil",           # URL amigável (único)
+    "slug": "volume-funnel",           # friendly URL (unique)
 })
 assert r.status_code == 201, r.text
 dash_id = r.json()["id"]
-print(f"Dashboard criado: id={dash_id}")
+print(f"Dashboard created: id={dash_id}")
 ```
 
 ---
 
-## Etapa 4 — Vincular charts ao dashboard
+## Step 4 — Link charts to dashboard
 
 ```python
-chart_ids = [2, 3, 4, 5, 6, 7, 8, 9]   # IDs retornados no passo 2
+chart_ids = [2, 3, 4, 5, 6, 7, 8, 9]   # IDs from step 2
 
 for cid in chart_ids:
     r = session.put(f"{BASE}/api/v1/chart/{cid}", json={"dashboards": [dash_id]})
-    assert r.status_code == 200, f"Erro ao vincular chart {cid}: {r.text}"
-    print(f"  ✓ chart {cid} vinculado")
+    assert r.status_code == 200, f"Error linking chart {cid}: {r.text}"
+    print(f"  ✓ chart {cid} linked")
 ```
 
 ---
 
-## Etapa 5 — Aplicar layout (position_json)
+## Step 5 — Apply layout (position_json)
 
-O layout usa um grid de **12 colunas**. Cada chart tem `width` (1–12) e `height` (unidades).
+Layout uses a **12-column** grid. Each chart has `width` (1–12) and `height` (units).
 
 ```python
 def build_position_json(rows):
     """
-    rows: lista de listas de chart_ids.
-    Exemplo: [[2, 3, 4], [5, 6, 7], [8, 9]]
-    → Linha 1 com 3 charts de width=4, Linha 2 com 2 charts de width=6
+    rows: list of lists of chart_ids.
+    Example: [[2, 3, 4], [5, 6, 7], [8, 9]]
+    → Row 1 with 3 charts width=4, Row 2 with 2 charts width=6
     """
     positions = {
         "DASHBOARD_VERSION_KEY": "v2",
@@ -176,8 +176,8 @@ def build_position_json(rows):
     for row_idx, row_charts in enumerate(rows):
         row_id = f"ROW_{row_idx + 1}"
         chart_keys = [f"CHART_{cid}" for cid in row_charts]
-        width = 12 // len(row_charts)           # divide igualmente
-        height = 15 if width <= 4 else 30       # KPIs menores, charts maiores
+        width = 12 // len(row_charts)           # split evenly
+        height = 15 if width <= 4 else 30       # smaller KPIs, larger charts
 
         positions[row_id] = {
             "type": "ROW", "id": row_id,
@@ -196,62 +196,62 @@ def build_position_json(rows):
     return json.dumps(positions)
 
 
-# Exemplo: 3 KPIs na linha 1, 3 KPIs na linha 2, 2 charts largos na linha 3
+# Example: 3 KPIs row 1, 3 KPIs row 2, 2 wide charts row 3
 position_json = build_position_json([
-    [2, 3, 4],    # linha 1 — 3 KPIs (width=4 cada)
-    [5, 6, 7],    # linha 2 — 3 KPIs (width=4 cada)
-    [8, 9],       # linha 3 — 2 charts (width=6 cada)
+    [2, 3, 4],    # row 1 — 3 KPIs (width=4 each)
+    [5, 6, 7],    # row 2 — 3 KPIs (width=4 each)
+    [8, 9],       # row 3 — 2 charts (width=6 each)
 ])
 
 r = session.put(f"{BASE}/api/v1/dashboard/{dash_id}", json={
     "position_json": position_json,
     "json_metadata": json.dumps({"refresh_frequency": 0}),
 })
-assert r.status_code == 200, f"Erro no layout: {r.text}"
-print(f"Layout aplicado. URL: {BASE}/superset/dashboard/{dash_id}/")
+assert r.status_code == 200, f"Layout error: {r.text}"
+print(f"Layout applied. URL: {BASE}/superset/dashboard/{dash_id}/")
 ```
 
 ---
 
-## Viz types confirmados neste build (apache/superset:latest 6.0.1)
+## Viz types confirmed in this build (apache/superset:latest 6.0.1)
 
-| viz_type | Uso | Status |
+| viz_type | Use | Status |
 |---|---|---|
-| `big_number_total` | KPI único | ✓ funciona |
-| `echarts_timeseries_bar` | Série temporal (x_axis + time_grain) | ✓ funciona |
-| `pie` | Donut / pizza | ✓ funciona |
-| `table` | Ranking, top N, breakdown por dimensão | ✓ funciona |
-| `bar` | Barra categórica (legado) | ✗ "Item with key 'bar' is not registered" |
-| `echarts_bar` | Barra categórica (ECharts) | ✗ "Item with key 'echarts_bar' is not registered" |
+| `big_number_total` | Single KPI | ✓ works |
+| `echarts_timeseries_bar` | Time series (x_axis + time_grain) | ✓ works |
+| `pie` | Donut / pie | ✓ works |
+| `table` | Ranking, top N, breakdown by dimension | ✓ works |
+| `bar` | Categorical bar (legacy) | ✗ "Item with key 'bar' is not registered" |
+| `echarts_bar` | Categorical bar (ECharts) | ✗ "Item with key 'echarts_bar' is not registered" |
 
-> **Regra:** A API REST aceita qualquer string como `viz_type` (retorna 201), mas o frontend falha se o plugin não estiver no bundle. Para charts agrupados por dimensão (`groupby`), usar **`table`**.
+> **Rule:** The REST API accepts any string as `viz_type` (returns 201), but the frontend fails if the plugin is not in the bundle. For charts grouped by dimension (`groupby`), use **`table`**.
 
 ---
 
-## Armadilhas conhecidas
+## Known pitfalls
 
-| Problema | Causa | Solução |
+| Issue | Cause | Solution |
 |---|---|---|
-| *"There is no chart definition"* | Charts não vinculados ao dashboard | PUT em cada chart com `{"dashboards": [dash_id]}` — etapa 4 |
-| `400 — position_data Unknown field` | Campo errado na versão 4.x/6.x | Usar `position_json`, não `position_data` |
-| `position_json` ignorado no POST | API não aceita layout na criação | Criar dashboard vazio (POST) e depois aplicar layout (PUT) |
-| Charts duplicados ao re-rodar | Script cria novos charts sem verificar existência | Verificar `/api/v1/chart/?q=...` antes de criar |
-| CSRF missing no PUT | Sessão não mantém cookies | Usar `requests.Session()`, não `requests.put()` avulso |
-| "Item with key X is not registered" | Plugin de viz não carregado no bundle | Ver tabela de viz types acima; usar `table` para categorias |
-| "Columns missing in dataset" | Nome de coluna em lowercase, dataset usa UPPERCASE | Validar colunas via `GET /api/v1/dataset/{id}` antes de criar charts |
+| *"There is no chart definition"* | Charts not linked to dashboard | PUT each chart with `{"dashboards": [dash_id]}` — step 4 |
+| `400 — position_data Unknown field` | Wrong field in 4.x/6.x | Use `position_json`, not `position_data` |
+| `position_json` ignored on POST | API does not accept layout on create | Create empty dashboard (POST) then apply layout (PUT) |
+| Duplicate charts on re-run | Script creates new charts without checking | Query `/api/v1/chart/?q=...` before creating |
+| CSRF missing on PUT | Session does not keep cookies | Use `requests.Session()`, not standalone `requests.put()` |
+| "Item with key X is not registered" | Viz plugin not loaded in bundle | See viz type table above; use `table` for categories |
+| "Columns missing in dataset" | Column name lowercase, dataset uses UPPERCASE | Validate columns via `GET /api/v1/dataset/{id}` before creating charts |
 
 ---
 
-## Script completo — referência rápida
+## Full script — quick reference
 
 ```python
-# 1. auth (ver acima)
-# 2. criar charts
-c1 = create_chart("Total de Cargas",     "big_number_total",       {...})
-c2 = create_chart("Evolução Mensal",     "echarts_timeseries_bar", {...})
-# 3. criar dashboard
+# 1. auth (see above)
+# 2. create charts
+c1 = create_chart("Total loads",     "big_number_total",       {...})
+c2 = create_chart("Monthly trend",     "echarts_timeseries_bar", {...})
+# 3. create dashboard
 dash_id = session.post(f"{BASE}/api/v1/dashboard/", json={...}).json()["id"]
-# 4. vincular
+# 4. link
 for cid in [c1, c2]:
     session.put(f"{BASE}/api/v1/chart/{cid}", json={"dashboards": [dash_id]})
 # 5. layout

@@ -11,25 +11,25 @@ DAG_ID       := loadsmart_pipeline
 .PHONY: help
 help:
 	@echo ""
-	@echo "  Loadsmart Case — comandos disponíveis"
+	@echo "  Loadsmart Case — available commands"
 	@echo ""
-	@echo "  make setup          Sobe tudo do zero (Docker → pipeline → Superset)"
-	@echo "  make reset          Dropa tudo e refaz do zero (teardown + setup)"
-	@echo "  make up             Sobe os containers"
-	@echo "  make pipeline       Executa o pipeline de dados no Airflow"
-	@echo "  make status         Mostra estado dos containers e do último pipeline"
-	@echo "  make teardown       Para e remove containers, volumes e imagens"
-	@echo "  make open           Abre Airflow e Superset no navegador"
-	@echo "  make logs-pipeline  Logs do pipeline de dados"
-	@echo "  make logs-bootstrap Logs da configuração do Superset"
+	@echo "  make setup          Full stack from scratch (Docker → pipeline → Superset)"
+	@echo "  make reset          Tear down and rebuild from scratch (teardown + setup)"
+	@echo "  make up             Start containers"
+	@echo "  make pipeline       Run the data pipeline in Airflow"
+	@echo "  make status         Show container status and last pipeline run"
+	@echo "  make teardown       Stop and remove containers, volumes, and images"
+	@echo "  make open           Open Airflow and Superset in the browser"
+	@echo "  make logs-pipeline  Data pipeline logs"
+	@echo "  make logs-bootstrap Superset setup logs"
 	@echo ""
 
-# ── Setup completo ────────────────────────────────────────────────────────────
+# ── Full setup ────────────────────────────────────────────────────────────────
 
 .PHONY: setup
 setup: up wait-airflow trigger-pipeline wait-pipeline
 	@echo ""
-	@echo "  ✓ Pipeline concluído. O Superset está configurando os dashboards..."
+	@echo "  ✓ Pipeline finished. Superset is configuring dashboards..."
 	@echo ""
 	@echo "  → Superset : http://localhost:8088 (admin / admin)"
 	@echo "  → Airflow  : http://localhost:9090 (admin / admin)"
@@ -39,47 +39,47 @@ setup: up wait-airflow trigger-pipeline wait-pipeline
 
 .PHONY: up
 up:
-	@echo "→ Subindo containers..."
+	@echo "→ Starting containers..."
 	docker compose up -d --build
-	@echo "  ✓ Containers iniciados"
+	@echo "  ✓ Containers started"
 
 .PHONY: reset
 reset: teardown setup
 
 .PHONY: teardown
 teardown:
-	@echo "→ Removendo containers, volumes e imagens..."
+	@echo "→ Removing containers, volumes, and images..."
 	docker compose down -v --rmi local
-	@echo "  ✓ Ambiente removido"
+	@echo "  ✓ Environment removed"
 
 # ── Airflow ───────────────────────────────────────────────────────────────────
 
 .PHONY: wait-airflow
 wait-airflow:
-	@echo "→ Aguardando Airflow..."
+	@echo "→ Waiting for Airflow..."
 	@timeout=120; \
 	while [ $$timeout -gt 0 ]; do \
 		status=$$(curl -s -o /dev/null -w "%{http_code}" $(AIRFLOW_URL)/health); \
 		if [ "$$status" = "200" ]; then \
-			echo "  ✓ Airflow pronto"; \
+			echo "  ✓ Airflow ready"; \
 			exit 0; \
 		fi; \
 		sleep 5; \
 		timeout=$$((timeout - 5)); \
 	done; \
-	echo "  ✗ Airflow não respondeu. Verifique: docker compose logs airflow-webserver"; \
+	echo "  ✗ Airflow did not respond. Check: docker compose logs airflow-webserver"; \
 	exit 1
 
 .PHONY: trigger-pipeline
 trigger-pipeline:
-	@echo "→ Ativando e disparando o pipeline..."
+	@echo "→ Enabling and triggering pipeline..."
 	@unpause=$$(curl -s -o /dev/null -w "%{http_code}" -X PATCH \
 		"$(AIRFLOW_URL)/api/v1/dags/$(DAG_ID)" \
 		-H "Content-Type: application/json" \
 		-u "$(AIRFLOW_USER):$(AIRFLOW_PASS)" \
 		-d '{"is_paused": false}'); \
 	if [ "$$unpause" != "200" ]; then \
-		echo "  ✗ Não foi possível ativar o DAG (HTTP $$unpause). Verifique se o Airflow subiu corretamente."; \
+		echo "  ✗ Could not enable DAG (HTTP $$unpause). Check that Airflow started correctly."; \
 		exit 1; \
 	fi
 	@run_id=$$(curl -s -X POST "$(AIRFLOW_URL)/api/v1/dags/$(DAG_ID)/dagRuns" \
@@ -87,11 +87,11 @@ trigger-pipeline:
 		-u "$(AIRFLOW_USER):$(AIRFLOW_PASS)" \
 		-d '{"conf": {}}' \
 		| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('dag_run_id','?'))"); \
-	echo "  ✓ Pipeline iniciado (run: $$run_id)"
+	echo "  ✓ Pipeline started (run: $$run_id)"
 
 .PHONY: wait-pipeline
 wait-pipeline:
-	@echo "→ Aguardando pipeline (ingest → dbt run → dbt test → export_last_month)..."
+	@echo "→ Waiting for pipeline (ingest → dbt run → dbt test → export_last_month)..."
 	@elapsed=0; \
 	while true; do \
 		response=$$(curl -s -u "$(AIRFLOW_USER):$(AIRFLOW_PASS)" \
@@ -105,37 +105,37 @@ wait-pipeline:
 			$$(echo "$$response" | python3 -c "import sys,json; runs=json.load(sys.stdin).get('dag_runs',[]); print(runs[0]['run_id'] if runs else '')" 2>/dev/null) \
 			2>/dev/null | grep "running\|queued" | awk '{print $$1}' | head -1); \
 		if [ -n "$$running_task" ]; then \
-			detail=" — tarefa: $$running_task"; \
+			detail=" — task: $$running_task"; \
 		else \
 			detail=""; \
 		fi; \
 		echo "  [$$elapsed s] $$state$$detail"; \
 		if [ "$$state" = "success" ]; then \
-			echo "  ✓ Pipeline concluído com sucesso ($$elapsed s)"; \
+			echo "  ✓ Pipeline completed successfully ($$elapsed s)"; \
 			latest_csv=$$(ls -t data/exports/*.csv 2>/dev/null | head -1); \
 			if [ -n "$$latest_csv" ]; then \
-				echo "  ✓ CSV exportado: $$latest_csv"; \
+				echo "  ✓ CSV exported: $$latest_csv"; \
 			fi; \
 			smtp_user=$$(grep -E '^SMTP_USER=.+' .env 2>/dev/null | cut -d= -f2-); \
 			smtp_pass=$$(grep -E '^SMTP_PASSWORD=.+' .env 2>/dev/null | cut -d= -f2-); \
 			smtp_recip=$$(grep -E '^SMTP_RECIPIENTS=.+' .env 2>/dev/null | cut -d= -f2-); \
 			if [ -n "$$smtp_user" ] && [ -n "$$smtp_pass" ] && [ -n "$$smtp_recip" ]; then \
-				echo "  ✓ E-mail enviado para: $$smtp_recip"; \
+				echo "  ✓ Email sent to: $$smtp_recip"; \
 			fi; \
 			exit 0; \
 		elif [ "$$state" = "failed" ]; then \
-			echo "  ✗ Pipeline falhou. Logs: make logs-pipeline"; \
+			echo "  ✗ Pipeline failed. Logs: make logs-pipeline"; \
 			exit 1; \
 		fi; \
 		sleep 15; \
 		elapsed=$$((elapsed + 15)); \
 		if [ $$elapsed -ge 900 ]; then \
-			echo "  ✗ Timeout (900s). Verifique: $(AIRFLOW_URL)"; \
+			echo "  ✗ Timeout (900s). Check: $(AIRFLOW_URL)"; \
 			exit 1; \
 		fi; \
 	done
 
-# ── Utilitários ───────────────────────────────────────────────────────────────
+# ── Utilities ───────────────────────────────────────────────────────────────
 
 .PHONY: open
 open:
@@ -160,7 +160,7 @@ status:
 	@echo "── Containers ──"
 	@docker compose ps --format "table {{.Name}}\t{{.Status}}"
 	@echo ""
-	@echo "── Último run do pipeline ──"
+	@echo "── Last pipeline run ──"
 	@curl -s -u "$(AIRFLOW_USER):$(AIRFLOW_PASS)" \
 		"$(AIRFLOW_URL)/api/v1/dags/$(DAG_ID)/dagRuns?order_by=-start_date&limit=1" \
-		| python3 -c "import sys,json; runs=json.load(sys.stdin).get('dag_runs',[]); r=runs[0] if runs else {}; print(f\"  estado : {r.get('state','nenhum run')}\n  início : {r.get('start_date','-')}\n  fim    : {r.get('end_date','-')}\")" 2>/dev/null
+		| python3 -c "import sys,json; runs=json.load(sys.stdin).get('dag_runs',[]); r=runs[0] if runs else {}; print(f\"  state  : {r.get('state','no run')}\n  start  : {r.get('start_date','-')}\n  end    : {r.get('end_date','-')}\")" 2>/dev/null

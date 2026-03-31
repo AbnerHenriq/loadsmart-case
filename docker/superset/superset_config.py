@@ -10,18 +10,18 @@ import os
 
 SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "loadsmart_superset_secret_change_me")
 
-# SQLite para metadados locais (adequado para demo/desenvolvimento)
+# SQLite for local metadata (fine for demo/dev)
 SQLALCHEMY_DATABASE_URI = "sqlite:////app/superset_home/superset.db"
 
-# Desabilita exemplos (acelera o init)
+# Disable examples (faster init)
 SUPERSET_LOAD_EXAMPLES = False
 
-# Permite que o Superset conecte a arquivos locais via SQLAlchemy
+# Allow Superset to connect to local files via SQLAlchemy
 PREVENT_UNSAFE_DB_CONNECTIONS = False
 
 # ── MCP Server (Superset 5.0+) ───────────────────────────────────────────────
-# Modo dev: auth desabilitada, usuário admin fixo.
-# NUNCA usar em produção.
+# Dev mode: auth disabled, fixed admin user.
+# NEVER use in production.
 MCP_AUTH_ENABLED = False
 MCP_DEV_USERNAME = "admin"
 

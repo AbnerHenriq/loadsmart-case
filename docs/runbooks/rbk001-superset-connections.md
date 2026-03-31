@@ -1,22 +1,22 @@
-# Runbook — Gerenciar Conexões de Database no Superset via API
+# Runbook — Manage Superset database connections via API
 
-## Contexto
+## Context
 
-Conexões de database no Superset são o ponto de entrada para todos os datasets e charts.
-Este runbook cobre listar, inspecionar e duplicar conexões via REST API.
+Database connections in Superset are the entry point for all datasets and charts.
+This runbook covers listing, inspecting, and duplicating connections via REST API.
 
-Padrão descoberto empiricamente no Superset **6.0.1** com DuckDB.
-
----
-
-## Pré-requisitos
-
-- Superset rodando em `http://localhost:8088`
-- Python com `requests` instalado
+Patterns discovered empirically on Superset **6.0.1** with DuckDB.
 
 ---
 
-## Autenticação
+## Prerequisites
+
+- Superset running at `http://localhost:8088`
+- Python with `requests` installed
+
+---
+
+## Authentication
 
 ```python
 import requests, json
@@ -35,7 +35,7 @@ session.headers.update({"X-CSRFToken": csrf_token, "Content-Type": "application/
 
 ---
 
-## 1. Listar conexões existentes
+## 1. List existing connections
 
 ```python
 r = session.get(f"{BASE}/api/v1/database/?q=(page_size:20)")
@@ -43,12 +43,12 @@ for db in r.json().get("result", []):
     print(f"id={db['id']}  name={db['database_name']}  backend={db.get('backend')}")
 ```
 
-> **Atenção**: o endpoint de listagem **não retorna** `sqlalchemy_uri` nem credenciais
-> por segurança. Use o endpoint `/connection` para inspecionar detalhes (ver seção 2).
+> **Note:** the list endpoint **does not return** `sqlalchemy_uri` or credentials
+> for security. Use the `/connection` endpoint to inspect details (see section 2).
 
 ---
 
-## 2. Inspecionar conexão completa
+## 2. Inspect full connection
 
 ```python
 DATABASE_ID = 1
@@ -63,23 +63,23 @@ print("parameters :", db["parameters"])
 print("extra      :", db["extra"])
 ```
 
-Este endpoint retorna a URI completa e todos os parâmetros de configuração —
-use-o como base para duplicar ou auditar a conexão.
+This endpoint returns the full URI and all configuration parameters —
+use it as the basis to duplicate or audit the connection.
 
 ---
 
-## 3. Duplicar conexão existente
+## 3. Duplicate existing connection
 
-Útil para criar ambientes separados (ex: produção vs sandbox) apontando para
-o mesmo banco, ou para testar alterações sem afetar a conexão original.
+Useful to create separate environments (e.g. production vs sandbox) pointing to
+the same database, or to test changes without affecting the original connection.
 
 ```python
-DATABASE_ID = 1  # id da conexão original
+DATABASE_ID = 1  # original connection id
 
-# 1. Buscar configuração completa
+# 1. Fetch full configuration
 db = session.get(f"{BASE}/api/v1/database/{DATABASE_ID}/connection").json()["result"]
 
-# 2. Criar cópia com novo nome
+# 2. Create copy with a new name
 r = session.post(f"{BASE}/api/v1/database/", json={
     "database_name":          f"{db['database_name']} (copy)",
     "sqlalchemy_uri":         db["sqlalchemy_uri"],
@@ -97,12 +97,12 @@ r = session.post(f"{BASE}/api/v1/database/", json={
 })
 
 new_id = r.json()["id"]
-print(f"Conexão criada: id={new_id}")
+print(f"Connection created: id={new_id}")
 ```
 
 ---
 
-## 4. Renomear conexão existente
+## 4. Rename existing connection
 
 ```python
 session.put(f"{BASE}/api/v1/database/{new_id}", json={
@@ -112,38 +112,38 @@ session.put(f"{BASE}/api/v1/database/{new_id}", json={
 
 ---
 
-## 5. Testar conectividade
+## 5. Test connectivity
 
 ```python
 r = session.get(f"{BASE}/api/v1/database/{DATABASE_ID}/schemas/")
-print("Schemas disponíveis:", r.json().get("result"))
+print("Available schemas:", r.json().get("result"))
 ```
 
-Se retornar lista vazia ou erro, a conexão está quebrada (URI errada, banco fora do ar,
-driver não instalado no venv do Superset).
+If it returns an empty list or error, the connection is broken (wrong URI, database down,
+driver not installed in Superset venv).
 
 ---
 
-## Conexões neste projeto
+## Connections in this project
 
-| id | Nome | URI |
+| id | Name | URI |
 |----|------|-----|
 | 1 | `DuckDB` | `duckdb:////opt/airflow/data/loadsmart.duckdb` |
 | 2 | `DuckDB (copy)` | `duckdb:////opt/airflow/data/loadsmart.duckdb` |
 
-### URI do DuckDB no Docker
+### DuckDB URI in Docker
 
-O caminho `/opt/airflow/data/` é o volume montado em `./data` no `docker-compose.yml`.
-**Nunca usar o path local da máquina host** (ex: `/Users/abner/...`) — o Superset roda
-dentro do container e não enxerga esse caminho.
+The path `/opt/airflow/data/` is the volume mounted from `./data` in `docker-compose.yml`.
+**Never use the host machine local path** (e.g. `/Users/abner/...`) — Superset runs
+inside the container and cannot see that path.
 
 ---
 
-## Armadilhas conhecidas
+## Known pitfalls
 
-| Armadilha | Causa | Fix |
-|-----------|-------|-----|
-| `GET /database/` não retorna URI | Endpoint de listagem mascara credenciais | Usar `GET /database/{id}/connection` |
-| Conexão criada mas datasets não enxergam o banco | `database_name` duplicado confunde o Superset | Dar nomes distintos sempre |
-| Driver `duckdb_engine` não encontrado | Instalado no Python errado (não no venv do Superset) | Ver runbook de instalação no README |
-| `sqlalchemy_uri` retorna `null` na listagem | Normal — só aparece em `/connection` | Usar o endpoint correto |
+| Pitfall | Cause | Fix |
+|---------|-------|-----|
+| `GET /database/` does not return URI | List endpoint masks credentials | Use `GET /database/{id}/connection` |
+| Connection created but datasets cannot see DB | Duplicate `database_name` confuses Superset | Always use distinct names |
+| `duckdb_engine` driver not found | Installed in wrong Python (not Superset venv) | See install runbook in README |
+| `sqlalchemy_uri` returns `null` in list | Normal — only appears on `/connection` | Use the correct endpoint |

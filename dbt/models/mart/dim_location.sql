@@ -5,33 +5,33 @@
   Reused by fct_shipments twice: as pickup_location_sk and delivery_location_sk.
 */
 
-with pickup_locations as (
+WITH pickup_locations AS (
 
-    select distinct pickup_city as city, pickup_state as state
-    from {{ ref('int_shipments') }}
-    where pickup_city is not null and pickup_state is not null
-
-),
-
-delivery_locations as (
-
-    select distinct delivery_city as city, delivery_state as state
-    from {{ ref('int_shipments') }}
-    where delivery_city is not null and delivery_state is not null
+    SELECT DISTINCT pickup_city AS city, pickup_state AS state
+    FROM {{ ref('int_shipments') }}
+    WHERE pickup_city IS NOT NULL AND pickup_state IS NOT NULL
 
 ),
 
-all_locations as (
+delivery_locations AS (
 
-    select city, state from pickup_locations
-    union
-    select city, state from delivery_locations
+    SELECT DISTINCT delivery_city AS city, delivery_state AS state
+    FROM {{ ref('int_shipments') }}
+    WHERE delivery_city IS NOT NULL AND delivery_state IS NOT NULL
+
+),
+
+all_locations AS (
+
+    SELECT city, state FROM pickup_locations
+    UNION
+    SELECT city, state FROM delivery_locations
 
 )
 
-select
-    {{ dbt_utils.generate_surrogate_key(['city', 'state']) }} as LOCATION_SK,
-    city                                                       as CITY,
-    state                                                      as STATE
+SELECT
+    {{ dbt_utils.generate_surrogate_key(['city', 'state']) }} AS LOCATION_SK,
+    city AS CITY,
+    state AS STATE
 
-from all_locations
+FROM all_locations

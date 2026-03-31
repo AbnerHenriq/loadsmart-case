@@ -1,84 +1,73 @@
-/*
-  int_shipments
-  ─────────────
-  Enriquecimento da staging com métricas derivadas de negócio.
-  Deduplicação de loadsmart_id foi movida para a staging (via QUALIFY).
-
-  Key decisions:
-  - computed_pnl substitui o campo pnl raw, inconsistente em 24 linhas
-    (ver docs/analysis/raw-data-findings.md — achado #5).
-  - Cargas canceladas são mantidas. A fact table expõe a flag LOAD_WAS_CANCELLED
-    para que consumidores filtrem conforme necessário.
-*/
-
-select
-    LOADSMART_ID,
-    LANE_RAW,
-    PICKUP_CITY,
-    PICKUP_STATE,
-    DELIVERY_CITY,
-    DELIVERY_STATE,
+SELECT
+    loadsmart_id,
+    lane_raw,
+    pickup_city,
+    pickup_state,
+    delivery_city,
+    delivery_state,
 
     -- timestamps
-    QUOTE_AT,
-    BOOKED_AT,
-    SOURCED_AT,
-    PICKUP_AT,
-    DELIVERED_AT,
-    PICKUP_APPOINTMENT_AT,
-    DELIVERY_APPOINTMENT_AT,
+    quote_at,
+    booked_at,
+    sourced_at,
+    pickup_at,
+    delivered_at,
+    pickup_appointment_at,
+    delivery_appointment_at,
 
-    -- financials (COMPUTED_PNL corrige as 24 linhas inconsistentes do raw)
-    BOOK_PRICE,
-    SOURCE_PRICE,
-    round(BOOK_PRICE - SOURCE_PRICE, 2)  as COMPUTED_PNL,
-    MILEAGE,
+    -- financials (computed_pnl fixes the 24 inconsistent raw rows)
+    book_price,
+    source_price,
+    ROUND(book_price - source_price, 2) AS computed_pnl,
+    mileage,
 
-    -- métricas de tempo derivadas
-    round(
-        date_diff('hour', PICKUP_AT, DELIVERED_AT) / 24.0, 2
-    )                                    as LEAD_TIME_DAYS,
+    -- derived time metrics
+    ROUND(
+        DATE_DIFF('hour', pickup_at, delivered_at) / 24.0,
+        2
+    ) AS lead_time_days,
 
-    round(
-        date_diff('hour', BOOKED_AT, PICKUP_AT) / 24.0, 2
-    )                                    as BOOKING_TO_PICKUP_DAYS,
+    ROUND(
+        DATE_DIFF('hour', booked_at, pickup_at) / 24.0,
+        2
+    ) AS booking_to_pickup_days,
 
-    -- flags financeiras derivadas
-    (BOOK_PRICE - SOURCE_PRICE) > 0      as IS_PROFITABLE,
-    MILEAGE > 0                          as IS_MILEAGE_VALID,
+    -- derived financial flags
+    (book_price - source_price) > 0 AS is_profitable,
+    mileage > 0 AS is_mileage_valid,
 
-    -- pontualidade de entrega
-    -- 467 linhas têm DELIVERED_AT < PICKUP_AT (problema de qualidade — achado #9)
-    case
-        when DELIVERED_AT is null or DELIVERY_APPOINTMENT_AT is null then null
-        when DELIVERED_AT <= DELIVERY_APPOINTMENT_AT then true
-        else false
-    end                                  as DELIVERED_ON_TIME,
+    -- delivery punctuality
+    -- 467 rows have delivered_at < pickup_at (data quality issue — finding #9)
+    CASE
+        WHEN delivered_at IS NULL OR delivery_appointment_at IS NULL THEN NULL
+        WHEN delivered_at <= delivery_appointment_at THEN TRUE
+        ELSE FALSE
+    END AS delivered_on_time,
 
-    -- qualquer método de tracking disponível
+    -- any tracking method available
     (
-        HAS_MOBILE_APP_TRACKING
-        or HAS_MACROPOINT_TRACKING
-        or HAS_EDI_TRACKING
-    )                                    as HAS_ANY_TRACKING,
+        has_mobile_app_tracking
+        OR has_macropoint_tracking
+        OR has_edi_tracking
+    ) AS has_any_tracking,
 
-    -- colunas pass-through
-    EQUIPMENT_TYPE,
-    SOURCING_CHANNEL,
-    CARRIER_RATING,
-    CARRIER_NAME,
-    SHIPPER_NAME,
-    CARRIER_ON_TIME_TO_PICKUP,
-    CARRIER_ON_TIME_TO_DELIVERY,
-    CARRIER_ON_TIME_OVERALL,
-    HAS_MOBILE_APP_TRACKING,
-    HAS_MACROPOINT_TRACKING,
-    HAS_EDI_TRACKING,
-    VIP_CARRIER,
-    CARRIER_DROPPED_US_COUNT,
-    CONTRACTED_LOAD,
-    LOAD_BOOKED_AUTONOMOUSLY,
-    LOAD_SOURCED_AUTONOMOUSLY,
-    LOAD_WAS_CANCELLED
+    -- pass-through columns
+    equipment_type,
+    sourcing_channel,
+    carrier_rating,
+    carrier_name,
+    shipper_name,
+    carrier_on_time_to_pickup,
+    carrier_on_time_to_delivery,
+    carrier_on_time_overall,
+    has_mobile_app_tracking,
+    has_macropoint_tracking,
+    has_edi_tracking,
+    vip_carrier,
+    carrier_dropped_us_count,
+    contracted_load,
+    load_booked_autonomously,
+    load_sourced_autonomously,
+    load_was_cancelled
 
-from {{ ref('stg_shipments') }}
+FROM {{ ref('stg_shipments') }}

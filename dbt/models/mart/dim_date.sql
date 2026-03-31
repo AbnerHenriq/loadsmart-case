@@ -1,35 +1,35 @@
 /*
   dim_date
   ────────
-  Date spine via dbt_utils.date_spine, cobrindo o range completo do dataset.
-  Grain: um dia por linha.
+  Date spine via dbt_utils.date_spine covering the full dataset range.
+  Grain: one row per day.
 
-  Nota: dbt_utils.date_spine não aceita CTE como parâmetro (gera SQL estático),
-  então as subqueries de boundary são injetadas diretamente nos argumentos.
+  Note: dbt_utils.date_spine does not accept a CTE as a parameter (emits static SQL),
+  so boundary subqueries are injected directly into the arguments.
 */
 
-with spine as (
+WITH spine AS (
 
     {{ dbt_utils.date_spine(
         datepart   = 'day',
-        start_date = "(select min(least(PICKUP_AT::date, DELIVERED_AT::date, BOOKED_AT::date)) from " ~ ref('int_shipments') ~ ")",
-        end_date   = "(select max(greatest(PICKUP_AT::date, DELIVERED_AT::date, BOOKED_AT::date)) + interval '1 day' from " ~ ref('int_shipments') ~ ")"
+        start_date = "(SELECT MIN(LEAST(pickup_at::DATE, delivered_at::DATE, booked_at::DATE)) FROM " ~ ref('int_shipments') ~ ")",
+        end_date   = "(SELECT MAX(GREATEST(pickup_at::DATE, delivered_at::DATE, booked_at::DATE)) + INTERVAL '1 day' FROM " ~ ref('int_shipments') ~ ")"
     ) }}
 
 )
 
-select
-    {{ dbt_utils.generate_surrogate_key(['date_day']) }} as DATE_SK,
-    date_day                                             as DATE_DAY,
-    extract(year    from date_day)::int                  as YEAR,
-    extract(quarter from date_day)::int                  as QUARTER,
-    extract(month   from date_day)::int                  as MONTH,
-    strftime(date_day, '%B')                             as MONTH_NAME,
-    extract(week    from date_day)::int                  as WEEK_OF_YEAR,
-    extract(day     from date_day)::int                  as DAY_OF_MONTH,
-    extract(dow     from date_day)::int                  as DAY_OF_WEEK,
-    strftime(date_day, '%A')                             as DAY_NAME,
-    date_day = current_date                              as IS_TODAY,
-    extract(dow from date_day) in (0, 6)                 as IS_WEEKEND
+SELECT
+    {{ dbt_utils.generate_surrogate_key(['date_day']) }} AS DATE_SK,
+    date_day AS DATE_DAY,
+    EXTRACT(YEAR FROM date_day)::INT AS YEAR,
+    EXTRACT(QUARTER FROM date_day)::INT AS QUARTER,
+    EXTRACT(MONTH FROM date_day)::INT AS MONTH,
+    STRFTIME(date_day, '%B') AS MONTH_NAME,
+    EXTRACT(WEEK FROM date_day)::INT AS WEEK_OF_YEAR,
+    EXTRACT(DAY FROM date_day)::INT AS DAY_OF_MONTH,
+    EXTRACT(DOW FROM date_day)::INT AS DAY_OF_WEEK,
+    STRFTIME(date_day, '%A') AS DAY_NAME,
+    date_day = CURRENT_DATE AS IS_TODAY,
+    EXTRACT(DOW FROM date_day) IN (0, 6) AS IS_WEEKEND
 
-from spine
+FROM spine

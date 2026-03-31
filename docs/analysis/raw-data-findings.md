@@ -1,23 +1,23 @@
 # Raw Data Findings — `raw.shipments`
 
-Análise realizada sobre o arquivo `2026_data_challenge_ae_data.csv` (5.361 linhas).
-Todos os números abaixo foram extraídos diretamente da camada `raw` antes de qualquer transformação.
+Analysis of `2026_data_challenge_ae_data.csv` (5,361 rows).
+All figures below were taken directly from the `raw` layer before any transformation.
 
 ---
 
-## 1. Coluna duplicada no CSV
+## 1. Duplicate column in CSV
 
-**Campo:** `has_mobile_app_tracking`
+**Field:** `has_mobile_app_tracking`
 
-O CSV contém esta coluna **duas vezes** com exatamente o mesmo nome. Pandas renomeia automaticamente a segunda ocorrência para `has_mobile_app_tracking.1`. A coluna duplicada foi dropada no script de ingestão (`scripts/ingest.py`) antes do carregamento no DuckDB, mantendo apenas a primeira ocorrência.
+The CSV contains this column **twice** with the exact same name. Pandas auto-renames the second occurrence to `has_mobile_app_tracking.1`. The duplicate column was dropped in the ingest script (`scripts/ingest.py`) before loading into DuckDB, keeping only the first occurrence.
 
-**Resolução:** Ambas as colunas são mantidas na ingestão (`scripts/ingest.py`): a segunda ocorrência é renomeada para `has_mobile_app_tracking_2`. Na camada staging (`stg_shipments.sql`) foi confirmado que as duas colunas são **idênticas** (0 divergências), portanto `has_mobile_app_tracking_2` é dropada ali — a coluna original segue exposta no mart. O raw preserva ambas para auditoria futura.
+**Resolution:** Both columns are kept at ingest (`scripts/ingest.py`): the second occurrence is renamed to `has_mobile_app_tracking_2`. In staging (`stg_shipments.sql`) both columns were confirmed **identical** (0 divergences), so `has_mobile_app_tracking_2` is dropped there — the original column remains exposed in the mart. Raw keeps both for future audit.
 
 ---
 
-## 2. Duplicatas de `loadsmart_id`
+## 2. Duplicate `loadsmart_id` values
 
-**Impacto:** 4 IDs duplicados → 8 linhas no total (4 pares de linhas exatamente iguais)
+**Impact:** 4 duplicate IDs → 8 rows total (4 pairs of exactly identical rows)
 
 
 | loadsmart_id | lane                           | load_was_cancelled |
@@ -28,112 +28,112 @@ O CSV contém esta coluna **duas vezes** com exatamente o mesmo nome. Pandas ren
 | 206586825    | Sapulpa,OK -> Warner Robins,GA | False              |
 
 
-Todos os pares são **linhas completamente idênticas** — não são atualizações ou versões diferentes do mesmo envio. Parecem ser duplicatas acidentais de ingestão na fonte.
+All pairs are **fully identical rows** — not updates or different versions of the same shipment. They look like accidental duplicate ingestion at the source.
 
-**Sugestão:** Adicionar constraint de unicidade na origem. No pipeline atual, a camada intermediate aplica `DISTINCT` para deduplicar antes de alimentar o mart.
+**Suggestion:** Add a uniqueness constraint at the source. In the current pipeline, the intermediate layer applies `DISTINCT` to deduplicate before feeding the mart.
 
 ---
 
-## 3. `carrier_name` nulo
+## 3. Null `carrier_name`
 
-**Impacto:** 499 linhas (9,31% do total)
+**Impact:** 499 rows (9.31% of total)
 
-A grande maioria dos registros sem carrier_name pertence a cargas canceladas (`load_was_cancelled = TRUE`). Isso é semanticamente coerente: se a carga foi cancelada antes da alocação de um carrier, não há nome a registrar.
+Most records without carrier_name are cancelled loads (`load_was_cancelled = TRUE`). That is semantically coherent: if the load was cancelled before a carrier was assigned, there is no name to record.
 
 
-| Situação                             | Linhas          |
+| Situation                             | Rows          |
 | ------------------------------------ | --------------- |
-| Total nulos                          | 499             |
-| Canceladas com carrier_name nulo     | ~480 (estimado) |
-| Não canceladas com carrier_name nulo | ~19             |
+| Total nulls                          | 499             |
+| Cancelled with null carrier_name     | ~480 (estimated) |
+| Not cancelled with null carrier_name | ~19             |
 
 
-**Sugestão:** Para cargas não canceladas sem carrier_name, investigar se houve falha de integração com o sistema de TMS. Considerar criar uma dimensão `dim_carrier` com um membro padrão `"Unknown"` para não quebrar integridade referencial no mart.
+**Suggestion:** For non-cancelled loads without carrier_name, investigate TMS integration failures. Consider a `dim_carrier` dimension with a default `"Unknown"` member to preserve referential integrity in the mart.
 
 ---
 
-## 4. `book_price` e `source_price` iguais a zero
+## 4. `book_price` and `source_price` equal to zero
 
-**Impacto:**
+**Impact:**
 
-- `book_price = 0`: 530 linhas
-- `source_price = 0`: 519 linhas
+- `book_price = 0`: 530 rows
+- `source_price = 0`: 519 rows
 
-**Breakdown por status de cancelamento:**
+**Breakdown by cancellation status:**
 
 
-| load_was_cancelled | Linhas | Linhas com book_price = 0 |
+| load_was_cancelled | Rows | Rows with book_price = 0 |
 | ------------------ | ------ | ------------------------- |
 | True               | 517    | 514                       |
-| False              | 4.844  | 16                        |
+| False              | 4,844  | 16                        |
 
 
-A esmagadora maioria dos zeros está em cargas canceladas. Para cargas canceladas, preços zero são semanticamente válidos (não houve execução do serviço). As 16 cargas **não canceladas com book_price = 0** são potencialmente problemáticas.
+The vast majority of zeros are on cancelled loads. For cancelled loads, zero prices are semantically valid (no service executed). The **16 non-cancelled rows with book_price = 0** are potentially problematic.
 
-**Sugestão:** Investigar as 16 cargas ativas com preço zero — podem ser testes, cargas de cortesia ou erros de registro. Considerar excluí-las de análises financeiras.
+**Suggestion:** Investigate the 16 active loads with zero price — may be tests, courtesy loads, or registration errors. Consider excluding them from financial analyses.
 
 ---
 
-## 5. `pnl` inconsistente com `book_price - source_price`
+## 5. `pnl` inconsistent with `book_price - source_price`
 
-**Impacto:** 24 linhas onde `pnl ≠ book_price - source_price` (diferença > $0,01)
+**Impact:** 24 rows where `pnl ≠ book_price - source_price` (difference > $0.01)
 
-Ao analisar os casos, **todos os 24 registros têm `source_price = 0` mas `book_price > 0`**, e o campo `pnl` registrado é `0` ao invés do valor esperado (`book_price`). Exemplo:
+In all **24** cases, **`source_price = 0` but `book_price > 0`**, and the recorded `pnl` is `0` instead of the expected value (`book_price`). Example:
 
 
-| loadsmart_id | book_price | source_price | pnl registrado | pnl esperado |
+| loadsmart_id | book_price | source_price | pnl recorded | pnl expected |
 | ------------ | ---------- | ------------ | -------------- | ------------ |
-| 206554409    | 7.232,42   | 0,00         | 0,00           | 7.232,42     |
-| 206577609    | 479,27     | 0,00         | 0,00           | 479,27       |
+| 206554409    | 7,232.42   | 0.00         | 0.00           | 7,232.42     |
+| 206577609    | 479.27     | 0.00         | 0.00           | 479.27       |
 
 
-**Sugestão:** O campo `pnl` não deve ser usado diretamente nas análises. A camada mart recalcula o PnL como `book_price - source_price` para garantir consistência.
+**Suggestion:** Do not use the raw `pnl` field directly in analytics. The mart recomputes PnL as `book_price - source_price` for consistency.
 
 ---
 
-## 6. `mileage` igual a zero
+## 6. `mileage` equal to zero
 
-**Impacto:** 47 linhas com `mileage = 0`
+**Impact:** 47 rows with `mileage = 0`
 
 
-| Status             | Linhas |
+| Status             | Rows |
 | ------------------ | ------ |
-| Canceladas         | 2      |
-| **Não canceladas** | **45** |
+| Cancelled         | 2      |
+| **Not cancelled** | **45** |
 
 
-As 45 cargas não canceladas com mileage zero são suspeitas. Exemplos verificados têm lanes reais de longa distância (ex: `Maxton,NC -> Portland,OR`, `Lakewood,NY -> Portland,OR`) — rotas que claramente deveriam ter mileage > 0.
+The 45 non-cancelled loads with zero mileage are suspicious. Verified examples have long real lanes (e.g. `Maxton,NC -> Portland,OR`, `Lakewood,NY -> Portland,OR`) — routes that clearly should have mileage > 0.
 
-**Sugestão:** Este é provavelmente um erro de integração com o sistema de cálculo de distâncias. As 45 linhas devem ser excluídas de análises de custo por milha. Considerar adicionar flag `is_mileage_valid` no mart.
+**Suggestion:** This is likely an integration error with the distance engine. Exclude those 45 rows from cost-per-mile analysis. Consider adding an `is_mileage_valid` flag in the mart.
 
 ---
 
-## 7. `carrier_rating` extremamente esparso
+## 7. `carrier_rating` very sparse
 
-**Impacto:** 4.614 de 5.361 linhas sem valor (86,1% nulo)
+**Impact:** 4,614 of 5,361 rows with no value (86.1% null)
 
 
-| Métrica          | Valor       |
+| Metric          | Value       |
 | ---------------- | ----------- |
-| Total de linhas  | 5.361       |
-| Com rating       | 747 (13,9%) |
-| Range de valores | 0,0 – 5,0   |
+| Total rows  | 5,361       |
+| With rating       | 747 (13.9%) |
+| Value range | 0.0 – 5.0   |
 
 
-Apenas 13,9% das cargas têm rating registrado. Isso torna a coluna inutilizável para análises populacionais sem segmentação explícita.
+Only 13.9% of loads have a rating. That makes the column unusable for population-level analysis without explicit segmentation.
 
-**Sugestão:** Verificar se o rating é preenchido apenas para carriers em determinado programa de avaliação ou a partir de uma data específica. Não usar `AVG(carrier_rating)` sem filtrar nulos — a média seria altamente viesada por seleção.
+**Suggestion:** Check whether rating is only filled for carriers in a certain program or after a given date. Do not use `AVG(carrier_rating)` without filtering nulls — the mean would be heavily selection-biased.
 
 ---
 
-## 8. `sourcing_channel` extremamente esparso
+## 8. `sourcing_channel` very sparse
 
-**Impacto:** 5.117 de 5.361 linhas sem valor (95,5% nulo)
+**Impact:** 5,117 of 5,361 rows with no value (95.5% null)
 
 
-| sourcing_channel     | Linhas |
+| sourcing_channel     | Rows |
 | -------------------- | ------ |
-| NULL                 | 5.117  |
+| NULL                 | 5,117  |
 | carrier_capacity     | 96     |
 | dat_in               | 80     |
 | dat_out              | 30     |
@@ -144,37 +144,36 @@ Apenas 13,9% das cargas têm rating registrado. Isso torna a coluna inutilizáve
 | livejobs             | 1      |
 
 
-**Sugestão:** Verificar se cargas com sourcing_channel nulo representam um canal específico (ex: canal direto, contratado) ou se houve falha de logging. Considerar mapear NULL para `"direct"` ou `"unknown"` para não distorcer análises de sourcing.
+**Suggestion:** Check whether null `sourcing_channel` means a specific channel (e.g. direct, contracted) or a logging failure. Consider mapping NULL to `"direct"` or `"unknown"` so sourcing analyses are not distorted.
 
 ---
 
-## 9. `delivered_at` anterior a `pickup_at`
+## 9. `delivered_at` before `pickup_at`
 
-**Impacto:** 467 linhas onde `delivery_date < pickup_date`
+**Impact:** 467 rows where `delivery_date < pickup_date`
 
-Isso é logicamente impossível para uma carga entregue. Possíveis causas:
+This is logically impossible for a delivered load. Possible causes:
 
-- Datas de entrega representam o **agendado** (appointment), não o real
-- Erro de fuso horário na conversão
-- Dados de teste
+- Delivery timestamps represent **scheduled** (appointment), not actual
+- Timezone error in conversion
+- Test data
 
-**Sugestão:** Clarificar se `delivery_date` é a data de entrega efetiva ou apenas o agendamento. Se efetiva, as 467 linhas precisam de investigação. A camada mart não filtra esses registros mas expõe a flag para análise.
+**Suggestion:** Clarify whether `delivery_date` is actual delivery or only appointment. If actual, the 467 rows need investigation. The mart does not filter these rows but exposes a flag for analysis.
 
 ---
 
-## Resumo executivo
+## Executive summary
 
 
-| #   | Achado                                              | Linhas afetadas | Severidade    |
+| #   | Finding                                              | Rows affected | Severity    |
 | --- | --------------------------------------------------- | --------------- | ------------- |
-| 1   | Coluna duplicada (`has_mobile_app_tracking`)        | todas           | Alta          |
-| 2   | `loadsmart_id` duplicado (linhas idênticas)         | 8               | Média         |
-| 3   | `carrier_name` nulo                                 | 499 (9,3%)      | Média         |
-| 4   | `book_price` / `source_price` = 0                   | ~530 / ~519     | Média         |
-| 5   | `pnl` inconsistente com `book_price - source_price` | 24              | Alta          |
-| 6   | `mileage` = 0 em cargas ativas                      | 45              | Média         |
-| 7   | `carrier_rating` esparso                            | 4.614 (86%)     | Informacional |
-| 8   | `sourcing_channel` esparso                          | 5.117 (95%)     | Informacional |
-| 9   | `delivered_at` < `pickup_at`                        | 467 (8,7%)      | Alta          |
-
+| 1   | Duplicate column (`has_mobile_app_tracking`)        | all           | High          |
+| 2   | Duplicate `loadsmart_id` (identical rows)         | 8               | Medium         |
+| 3   | Null `carrier_name`                                 | 499 (9.3%)      | Medium         |
+| 4   | `book_price` / `source_price` = 0                   | ~530 / ~519     | Medium         |
+| 5   | `pnl` inconsistent with `book_price - source_price` | 24              | High          |
+| 6   | `mileage` = 0 on active loads                      | 45              | Medium         |
+| 7   | `carrier_rating` sparse                            | 4,614 (86%)     | Informational |
+| 8   | `sourcing_channel` sparse                          | 5,117 (95%)     | Informational |
+| 9   | `delivered_at` < `pickup_at`                        | 467 (8.7%)      | High          |
 

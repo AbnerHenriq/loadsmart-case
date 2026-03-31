@@ -6,59 +6,59 @@
   (mostly cancelled loads — see docs/analysis/raw-data-findings.md, finding #3).
 */
 
-with carriers as (
+WITH carriers AS (
 
-    select distinct
+    SELECT DISTINCT
         carrier_name,
-        -- use max() to get a non-null rating where available across shipments
-        max(carrier_rating)          as carrier_rating,
-        max(vip_carrier::int)::bool  as vip_carrier,
-        max(carrier_dropped_us_count) as carrier_dropped_us_count
+        -- use MAX() to get a non-null rating where available across shipments
+        MAX(carrier_rating) AS carrier_rating,
+        MAX(vip_carrier::INT)::BOOL AS vip_carrier,
+        MAX(carrier_dropped_us_count) AS carrier_dropped_us_count
 
-    from {{ ref('int_shipments') }}
-    where carrier_name is not null
-    group by carrier_name
+    FROM {{ ref('int_shipments') }}
+    WHERE carrier_name IS NOT NULL
+    GROUP BY carrier_name
 
 ),
 
-with_sk as (
+with_sk AS (
 
-    select
-        {{ dbt_utils.generate_surrogate_key(['carrier_name']) }} as carrier_sk,
-        NULLIF(TRIM(carrier_name), '')                           as carrier_name,
+    SELECT
+        {{ dbt_utils.generate_surrogate_key(['carrier_name']) }} AS carrier_sk,
+        NULLIF(TRIM(carrier_name), '') AS carrier_name,
         carrier_rating,
         vip_carrier,
         carrier_dropped_us_count
 
-    from carriers
+    FROM carriers
 
 ),
 
 -- sentinel row for shipments with no carrier assigned
-unknown as (
+unknown AS (
 
-    select
-        'unknown-carrier'  as carrier_sk,
-        'Unknown'          as carrier_name,
-        null::double       as carrier_rating,
-        false              as vip_carrier,
-        0                  as carrier_dropped_us_count
+    SELECT
+        'unknown-carrier' AS carrier_sk,
+        'Unknown' AS carrier_name,
+        NULL::DOUBLE AS carrier_rating,
+        FALSE AS vip_carrier,
+        0 AS carrier_dropped_us_count
 
 ),
 
-combined as (
+combined AS (
 
-    select * from unknown
-    union all
-    select * from with_sk
+    SELECT * FROM unknown
+    UNION ALL
+    SELECT * FROM with_sk
 
 )
 
-select
-    carrier_sk               as CARRIER_SK,
-    carrier_name             as CARRIER_NAME,
-    carrier_rating           as CARRIER_RATING,
-    vip_carrier              as VIP_CARRIER,
-    carrier_dropped_us_count as CARRIER_DROPPED_US_COUNT
+SELECT
+    carrier_sk AS CARRIER_SK,
+    carrier_name AS CARRIER_NAME,
+    carrier_rating AS CARRIER_RATING,
+    vip_carrier AS VIP_CARRIER,
+    carrier_dropped_us_count AS CARRIER_DROPPED_US_COUNT
 
-from combined
+FROM combined

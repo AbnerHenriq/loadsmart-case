@@ -48,35 +48,35 @@ def get_session() -> requests.Session:
 
 
 def wait_for_superset(timeout: int = 120):
-    print(f"Aguardando Superset em {BASE} ...")
+    print(f"Waiting for Superset at {BASE} ...")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             r = requests.get(f"{BASE}/health", timeout=5)
             if r.status_code == 200:
-                print("  ✓ Superset pronto")
+                print("  ✓ Superset ready")
                 return
         except requests.ConnectionError:
             pass
         time.sleep(5)
-    print("  ✗ Superset não respondeu — abortando", file=sys.stderr)
+    print("  ✗ Superset did not respond — aborting", file=sys.stderr)
     sys.exit(1)
 
 
 def wait_for_duckdb(timeout: int = 600):
     """
-    Espera o Airflow DAG materializar os modelos dbt.
-    Verifica se main_mart.fct_shipments existe e tem dados.
-    Sai com código 1 se expirar (docker-compose restart: on-failure vai tentar de novo).
+    Wait for the Airflow DAG to materialize dbt models.
+    Checks that main_mart.fct_shipments exists and has rows.
+    Exits with code 1 on timeout (docker-compose restart: on-failure will retry).
     """
     try:
         import duckdb as _duckdb
     except ImportError:
-        print("  ~ duckdb não disponível neste container — pulando verificação")
+        print("  ~ duckdb not available in this container — skipping check")
         print()
         return
 
-    print(f"Aguardando modelos dbt em {DUCKDB_PATH} ...")
+    print(f"Waiting for dbt models at {DUCKDB_PATH} ...")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -86,17 +86,17 @@ def wait_for_duckdb(timeout: int = 600):
             ).fetchone()[0]
             con.close()
             if count > 0:
-                print(f"  ✓ DuckDB pronto ({count:,} linhas em fct_shipments)\n")
+                print(f"  ✓ DuckDB ready ({count:,} rows in fct_shipments)\n")
                 return
         except Exception:
             pass
-        print("  ... modelos dbt ainda não disponíveis, aguardando 15s")
+        print("  ... dbt models not yet available, waiting 15s")
         time.sleep(15)
 
     print(
-        "  ✗ Modelos dbt não encontrados após timeout.\n"
-        "    Acesse o Airflow (localhost:9090) e execute o DAG 'loadsmart_pipeline'.\n"
-        "    Este serviço tentará novamente automaticamente.",
+        "  ✗ dbt models not found after timeout.\n"
+        "    Open Airflow (localhost:9090) and run the 'loadsmart_pipeline' DAG.\n"
+        "    This service will retry automatically.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -113,13 +113,13 @@ def ok(name: str):
 
 
 def skip(name: str):
-    print(f"  ~ {name} (já existe — pulando)")
+    print(f"  ~ {name} (already exists — skipping)")
 
 
 # ── 1. Connection ─────────────────────────────────────────────────────────────
 
 def setup_connection(session: requests.Session) -> int:
-    log("── 1. Conexão de database ──")
+    log("── 1. Database connection ──")
 
     existing = {db["database_name"]: db["id"]
                 for db in session.get(f"{BASE}/api/v1/database/?q=(page_size:50)").json().get("result", [])}
@@ -147,7 +147,7 @@ def setup_connection(session: requests.Session) -> int:
         "impersonate_user":     False,
     })
     db_id = r.json()["id"]
-    ok(f"DuckDB criado (id={db_id})")
+    ok(f"DuckDB created (id={db_id})")
     return db_id
 
 
@@ -199,83 +199,83 @@ def setup_datasets(session: requests.Session, db_id: int) -> dict[str, int]:
 # ── 3. Metrics ────────────────────────────────────────────────────────────────
 
 ALL_METRICS = [
-    # Domain 1 — Financeiro
-    {"metric_name":"total_revenue",    "verbose_name":"Receita Total",          "expression":"SUM(book_price)",                    "metric_type":"sum","d3format":"$,.2f"},
-    {"metric_name":"total_cost",       "verbose_name":"Custo Total",            "expression":"SUM(source_price)",                  "metric_type":"sum","d3format":"$,.2f"},
-    {"metric_name":"total_pnl",        "verbose_name":"PnL Total",              "expression":"SUM(pnl)",                           "metric_type":"sum","d3format":"$,.2f"},
-    {"metric_name":"avg_book_price",   "verbose_name":"Book Price Médio",       "expression":"AVG(book_price)",                    "metric_type":"avg","d3format":"$,.2f"},
-    {"metric_name":"avg_pnl",          "verbose_name":"PnL Médio",              "expression":"AVG(pnl)",                           "metric_type":"avg","d3format":"$,.2f"},
-    {"metric_name":"total_mileage",    "verbose_name":"Mileage Total",          "expression":"SUM(mileage)",                       "metric_type":"sum","d3format":",d"},
-    {"metric_name":"avg_mileage",      "verbose_name":"Mileage Médio",          "expression":"AVG(mileage)",                       "metric_type":"avg","d3format":",.1f"},
-    {"metric_name":"margin_pct",       "verbose_name":"Margem %",               "expression":"SUM(pnl) / SUM(book_price)",         "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"cost_per_mile",    "verbose_name":"Custo por Milha",        "expression":"SUM(source_price) / SUM(mileage)",   "metric_type":"avg","d3format":"$,.3f"},
-    {"metric_name":"revenue_per_mile", "verbose_name":"Receita por Milha",      "expression":"SUM(book_price) / SUM(mileage)",     "metric_type":"avg","d3format":"$,.3f"},
-    {"metric_name":"pnl_per_mile",     "verbose_name":"PnL por Milha",          "expression":"SUM(pnl) / SUM(mileage)",            "metric_type":"avg","d3format":"$,.3f"},
-    {"metric_name":"spread_price",     "verbose_name":"Spread Book vs Source",  "expression":"AVG(book_price - source_price)",     "metric_type":"avg","d3format":"$,.2f"},
-    # Domain 2 — Volume / Funil
-    {"metric_name":"total_loads",          "verbose_name":"Total de Cargas",              "expression":"COUNT(loadsmart_id)",                                              "metric_type":"count","d3format":",d"},
-    {"metric_name":"cancelled_loads",      "verbose_name":"Cargas Canceladas",            "expression":"SUM(load_was_cancelled::int)",                                      "metric_type":"sum",  "d3format":",d"},
-    {"metric_name":"active_loads",         "verbose_name":"Cargas Ativas",                "expression":"SUM((NOT load_was_cancelled)::int)",                                "metric_type":"sum",  "d3format":",d"},
-    {"metric_name":"contracted_loads",     "verbose_name":"Cargas Contratadas",           "expression":"SUM(contracted_load::int)",                                         "metric_type":"sum",  "d3format":",d"},
-    {"metric_name":"cancellation_rate",    "verbose_name":"Taxa de Cancelamento",         "expression":"SUM(load_was_cancelled::int) * 1.0 / COUNT(*)",                     "metric_type":"avg",  "d3format":".1%"},
-    {"metric_name":"contracted_load_rate", "verbose_name":"% Cargas Contratadas",         "expression":"SUM(contracted_load::int) * 1.0 / COUNT(*)",                        "metric_type":"avg",  "d3format":".1%"},
-    {"metric_name":"avg_lead_time_booking","verbose_name":"Lead Time Quote→Book (h)",     "expression":"AVG(datediff('hour', quote_at, booked_at))",                        "metric_type":"avg",  "d3format":",.1f"},
-    {"metric_name":"avg_lead_time_sourcing","verbose_name":"Lead Time Book→Source (h)",   "expression":"AVG(datediff('hour', booked_at, sourced_at))",                      "metric_type":"avg",  "d3format":",.1f"},
-    {"metric_name":"avg_transit_days",     "verbose_name":"Transit Time Médio (dias)",    "expression":"AVG(datediff('day', pickup_at, delivered_at))",                     "metric_type":"avg",  "d3format":",.1f"},
+    # Domain 1 — Financial
+    {"metric_name":"total_revenue",    "verbose_name":"Total revenue",          "expression":"SUM(book_price)",                    "metric_type":"sum","d3format":"$,.2f"},
+    {"metric_name":"total_cost",       "verbose_name":"Total cost",            "expression":"SUM(source_price)",                  "metric_type":"sum","d3format":"$,.2f"},
+    {"metric_name":"total_pnl",        "verbose_name":"Total PnL",              "expression":"SUM(pnl)",                           "metric_type":"sum","d3format":"$,.2f"},
+    {"metric_name":"avg_book_price",   "verbose_name":"Avg book price",       "expression":"AVG(book_price)",                    "metric_type":"avg","d3format":"$,.2f"},
+    {"metric_name":"avg_pnl",          "verbose_name":"Avg PnL",              "expression":"AVG(pnl)",                           "metric_type":"avg","d3format":"$,.2f"},
+    {"metric_name":"total_mileage",    "verbose_name":"Total mileage",          "expression":"SUM(mileage)",                       "metric_type":"sum","d3format":",d"},
+    {"metric_name":"avg_mileage",      "verbose_name":"Avg mileage",          "expression":"AVG(mileage)",                       "metric_type":"avg","d3format":",.1f"},
+    {"metric_name":"margin_pct",       "verbose_name":"Margin %",               "expression":"SUM(pnl) / SUM(book_price)",         "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"cost_per_mile",    "verbose_name":"Cost per mile",        "expression":"SUM(source_price) / SUM(mileage)",   "metric_type":"avg","d3format":"$,.3f"},
+    {"metric_name":"revenue_per_mile", "verbose_name":"Revenue per mile",      "expression":"SUM(book_price) / SUM(mileage)",     "metric_type":"avg","d3format":"$,.3f"},
+    {"metric_name":"pnl_per_mile",     "verbose_name":"PnL per mile",          "expression":"SUM(pnl) / SUM(mileage)",            "metric_type":"avg","d3format":"$,.3f"},
+    {"metric_name":"spread_price",     "verbose_name":"Book vs source spread",  "expression":"AVG(book_price - source_price)",     "metric_type":"avg","d3format":"$,.2f"},
+    # Domain 2 — Volume / Funnel
+    {"metric_name":"total_loads",          "verbose_name":"Total loads",              "expression":"COUNT(loadsmart_id)",                                              "metric_type":"count","d3format":",d"},
+    {"metric_name":"cancelled_loads",      "verbose_name":"Cancelled loads",            "expression":"SUM(load_was_cancelled::int)",                                      "metric_type":"sum",  "d3format":",d"},
+    {"metric_name":"active_loads",         "verbose_name":"Active loads",                "expression":"SUM((NOT load_was_cancelled)::int)",                                "metric_type":"sum",  "d3format":",d"},
+    {"metric_name":"contracted_loads",     "verbose_name":"Contracted loads",           "expression":"SUM(contracted_load::int)",                                         "metric_type":"sum",  "d3format":",d"},
+    {"metric_name":"cancellation_rate",    "verbose_name":"Cancellation rate",         "expression":"SUM(load_was_cancelled::int) * 1.0 / COUNT(*)",                     "metric_type":"avg",  "d3format":".1%"},
+    {"metric_name":"contracted_load_rate", "verbose_name":"% contracted loads",         "expression":"SUM(contracted_load::int) * 1.0 / COUNT(*)",                        "metric_type":"avg",  "d3format":".1%"},
+    {"metric_name":"avg_lead_time_booking","verbose_name":"Lead time quote→book (h)",     "expression":"AVG(datediff('hour', quote_at, booked_at))",                        "metric_type":"avg",  "d3format":",.1f"},
+    {"metric_name":"avg_lead_time_sourcing","verbose_name":"Lead time book→source (h)",   "expression":"AVG(datediff('hour', booked_at, sourced_at))",                      "metric_type":"avg",  "d3format":",.1f"},
+    {"metric_name":"avg_transit_days",     "verbose_name":"Avg transit time (days)",    "expression":"AVG(datediff('day', pickup_at, delivered_at))",                     "metric_type":"avg",  "d3format":",.1f"},
     # Domain 3 — Carrier
-    {"metric_name":"on_time_pickup_count",   "verbose_name":"Coletas On-Time",            "expression":"SUM(carrier_on_time_to_pickup::int)",                                                              "metric_type":"sum","d3format":",d"},
-    {"metric_name":"on_time_delivery_count", "verbose_name":"Entregas On-Time",           "expression":"SUM(carrier_on_time_to_delivery::int)",                                                            "metric_type":"sum","d3format":",d"},
-    {"metric_name":"on_time_overall_count",  "verbose_name":"On-Time Geral",              "expression":"SUM(carrier_on_time_overall::int)",                                                                "metric_type":"sum","d3format":",d"},
-    {"metric_name":"total_carrier_drops",    "verbose_name":"Total de Drops",             "expression":"SUM(carrier_dropped_us_count)",                                                                    "metric_type":"sum","d3format":",d"},
-    {"metric_name":"vip_carrier_loads",      "verbose_name":"Cargas com VIP Carrier",     "expression":"SUM(vip_carrier::int)",                                                                            "metric_type":"sum","d3format":",d"},
-    {"metric_name":"on_time_pickup_rate",    "verbose_name":"On-Time to Pickup %",        "expression":"SUM(carrier_on_time_to_pickup::int) * 1.0 / COUNT(*)",                                            "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"on_time_delivery_rate",  "verbose_name":"On-Time to Delivery %",      "expression":"SUM(carrier_on_time_to_delivery::int) * 1.0 / COUNT(*)",                                          "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"on_time_overall_rate",   "verbose_name":"On-Time Overall %",          "expression":"SUM(carrier_on_time_overall::int) * 1.0 / COUNT(*)",                                              "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"avg_drops_per_carrier",  "verbose_name":"Média de Drops por Carrier", "expression":"SUM(carrier_dropped_us_count) * 1.0 / COUNT(*)",                                                  "metric_type":"avg","d3format":".2f"},
-    {"metric_name":"vip_carrier_rate",       "verbose_name":"% Cargas com VIP Carrier",   "expression":"SUM(vip_carrier::int) * 1.0 / COUNT(*)",                                                          "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"on_time_delta",          "verbose_name":"Gap Pickup vs Delivery OT",  "expression":"(SUM(carrier_on_time_to_pickup::int) - SUM(carrier_on_time_to_delivery::int)) * 1.0 / COUNT(*)", "metric_type":"avg","d3format":".1%"},
-    # Domain 4 — Automação
-    {"metric_name":"autonomously_booked",    "verbose_name":"Bookings Autônomos",          "expression":"SUM(load_booked_autonomously::int)",                                                                    "metric_type":"sum","d3format":",d"},
-    {"metric_name":"autonomously_sourced",   "verbose_name":"Sourcings Autônomos",         "expression":"SUM(load_sourced_autonomously::int)",                                                                   "metric_type":"sum","d3format":",d"},
-    {"metric_name":"fully_autonomous_loads", "verbose_name":"Cargas 100% Autônomas",       "expression":"SUM((load_booked_autonomously AND load_sourced_autonomously)::int)",                                    "metric_type":"sum","d3format":",d"},
-    {"metric_name":"autonomous_booking_rate","verbose_name":"Taxa de Booking Autônomo",    "expression":"SUM(load_booked_autonomously::int) * 1.0 / COUNT(*)",                                                  "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"autonomous_sourcing_rate","verbose_name":"Taxa de Sourcing Autônomo",  "expression":"SUM(load_sourced_autonomously::int) * 1.0 / COUNT(*)",                                                 "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"fully_autonomous_rate",  "verbose_name":"Taxa 100% Autônoma",          "expression":"SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)",                  "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"human_intervention_rate","verbose_name":"Taxa de Intervenção Humana",  "expression":"1.0 - SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)",            "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"on_time_pickup_count",   "verbose_name":"On-time pickups",            "expression":"SUM(carrier_on_time_to_pickup::int)",                                                              "metric_type":"sum","d3format":",d"},
+    {"metric_name":"on_time_delivery_count", "verbose_name":"On-time deliveries",           "expression":"SUM(carrier_on_time_to_delivery::int)",                                                            "metric_type":"sum","d3format":",d"},
+    {"metric_name":"on_time_overall_count",  "verbose_name":"On-time overall",              "expression":"SUM(carrier_on_time_overall::int)",                                                                "metric_type":"sum","d3format":",d"},
+    {"metric_name":"total_carrier_drops",    "verbose_name":"Total carrier drops",             "expression":"SUM(carrier_dropped_us_count)",                                                                    "metric_type":"sum","d3format":",d"},
+    {"metric_name":"vip_carrier_loads",      "verbose_name":"Loads with VIP carrier",     "expression":"SUM(vip_carrier::int)",                                                                            "metric_type":"sum","d3format":",d"},
+    {"metric_name":"on_time_pickup_rate",    "verbose_name":"On-time to pickup %",        "expression":"SUM(carrier_on_time_to_pickup::int) * 1.0 / COUNT(*)",                                            "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"on_time_delivery_rate",  "verbose_name":"On-time to delivery %",      "expression":"SUM(carrier_on_time_to_delivery::int) * 1.0 / COUNT(*)",                                          "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"on_time_overall_rate",   "verbose_name":"On-time overall %",          "expression":"SUM(carrier_on_time_overall::int) * 1.0 / COUNT(*)",                                              "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"avg_drops_per_carrier",  "verbose_name":"Avg drops per carrier", "expression":"SUM(carrier_dropped_us_count) * 1.0 / COUNT(*)",                                                  "metric_type":"avg","d3format":".2f"},
+    {"metric_name":"vip_carrier_rate",       "verbose_name":"% loads with VIP carrier",   "expression":"SUM(vip_carrier::int) * 1.0 / COUNT(*)",                                                          "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"on_time_delta",          "verbose_name":"Pickup vs delivery on-time gap",  "expression":"(SUM(carrier_on_time_to_pickup::int) - SUM(carrier_on_time_to_delivery::int)) * 1.0 / COUNT(*)", "metric_type":"avg","d3format":".1%"},
+    # Domain 4 — Automation
+    {"metric_name":"autonomously_booked",    "verbose_name":"Autonomous bookings",          "expression":"SUM(load_booked_autonomously::int)",                                                                    "metric_type":"sum","d3format":",d"},
+    {"metric_name":"autonomously_sourced",   "verbose_name":"Autonomous sourcings",         "expression":"SUM(load_sourced_autonomously::int)",                                                                   "metric_type":"sum","d3format":",d"},
+    {"metric_name":"fully_autonomous_loads", "verbose_name":"100% autonomous loads",       "expression":"SUM((load_booked_autonomously AND load_sourced_autonomously)::int)",                                    "metric_type":"sum","d3format":",d"},
+    {"metric_name":"autonomous_booking_rate","verbose_name":"Autonomous booking rate",    "expression":"SUM(load_booked_autonomously::int) * 1.0 / COUNT(*)",                                                  "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"autonomous_sourcing_rate","verbose_name":"Autonomous sourcing rate",  "expression":"SUM(load_sourced_autonomously::int) * 1.0 / COUNT(*)",                                                 "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"fully_autonomous_rate",  "verbose_name":"100% autonomous rate",          "expression":"SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)",                  "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"human_intervention_rate","verbose_name":"Human intervention rate",  "expression":"1.0 - SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)",            "metric_type":"avg","d3format":".1%"},
     # Domain 5 — Tracking
-    {"metric_name":"mobile_tracked",          "verbose_name":"Cargas com Mobile Tracking", "expression":"SUM(has_mobile_app_tracking::int)",                                                                          "metric_type":"sum","d3format":",d"},
-    {"metric_name":"macropoint_tracked",      "verbose_name":"Cargas com Macropoint",      "expression":"SUM(has_macropoint_tracking::int)",                                                                          "metric_type":"sum","d3format":",d"},
-    {"metric_name":"edi_tracked",             "verbose_name":"Cargas com EDI",             "expression":"SUM(has_edi_tracking::int)",                                                                                 "metric_type":"sum","d3format":",d"},
-    {"metric_name":"any_tracked",             "verbose_name":"Cargas com Algum Tracking",  "expression":"SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int)",                        "metric_type":"sum","d3format":",d"},
-    {"metric_name":"mobile_tracking_rate",    "verbose_name":"Cobertura Mobile App %",     "expression":"SUM(has_mobile_app_tracking::int) * 1.0 / COUNT(*)",                                                        "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"macropoint_tracking_rate","verbose_name":"Cobertura Macropoint %",     "expression":"SUM(has_macropoint_tracking::int) * 1.0 / COUNT(*)",                                                        "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"edi_tracking_rate",       "verbose_name":"Cobertura EDI %",            "expression":"SUM(has_edi_tracking::int) * 1.0 / COUNT(*)",                                                               "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"total_tracking_coverage", "verbose_name":"Cobertura Total de Tracking %","expression":"SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)",    "metric_type":"avg","d3format":".1%"},
-    {"metric_name":"blind_shipment_rate",     "verbose_name":"Cargas sem Nenhum Tracking %","expression":"1.0 - SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)","metric_type":"avg","d3format":".1%"},
+    {"metric_name":"mobile_tracked",          "verbose_name":"Loads with mobile tracking", "expression":"SUM(has_mobile_app_tracking::int)",                                                                          "metric_type":"sum","d3format":",d"},
+    {"metric_name":"macropoint_tracked",      "verbose_name":"Loads with Macropoint",      "expression":"SUM(has_macropoint_tracking::int)",                                                                          "metric_type":"sum","d3format":",d"},
+    {"metric_name":"edi_tracked",             "verbose_name":"Loads with EDI",             "expression":"SUM(has_edi_tracking::int)",                                                                                 "metric_type":"sum","d3format":",d"},
+    {"metric_name":"any_tracked",             "verbose_name":"Loads with any tracking",  "expression":"SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int)",                        "metric_type":"sum","d3format":",d"},
+    {"metric_name":"mobile_tracking_rate",    "verbose_name":"Mobile app coverage %",     "expression":"SUM(has_mobile_app_tracking::int) * 1.0 / COUNT(*)",                                                        "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"macropoint_tracking_rate","verbose_name":"Macropoint coverage %",     "expression":"SUM(has_macropoint_tracking::int) * 1.0 / COUNT(*)",                                                        "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"edi_tracking_rate",       "verbose_name":"EDI coverage %",            "expression":"SUM(has_edi_tracking::int) * 1.0 / COUNT(*)",                                                               "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"total_tracking_coverage", "verbose_name":"Total tracking coverage %","expression":"SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)",    "metric_type":"avg","d3format":".1%"},
+    {"metric_name":"blind_shipment_rate",     "verbose_name":"Loads with no tracking %","expression":"1.0 - SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)","metric_type":"avg","d3format":".1%"},
 ]
 
 ALLOWED_MET = {"metric_name","expression","metric_type","verbose_name","d3format","description","warning_text","extra"}
 
 
 def setup_metrics(session: requests.Session, dataset_id: int):
-    log("\n── 3. Métricas ──")
+    log("\n── 3. Metrics ──")
 
     existing = session.get(f"{BASE}/api/v1/dataset/{dataset_id}").json()["result"]["metrics"]
     existing_names = {m["metric_name"] for m in existing
                       if m["metric_name"] in {m["metric_name"] for m in ALL_METRICS}}
 
     if len(existing_names) == len(ALL_METRICS):
-        skip(f"todas as {len(ALL_METRICS)} métricas")
+        skip(f"all {len(ALL_METRICS)} metrics")
         return
 
-    # PUT completo: substitui todos os existentes de uma vez.
-    # Não incluir as métricas antigas com seus IDs — misturar IDs + novos sem ID
-    # causa 422 "One or more metrics already exist" no Superset.
+    # Full PUT: replaces all metrics at once.
+    # Do not merge old metrics with IDs mixed with new ones without ID — causes
+    # 422 "One or more metrics already exist" in Superset.
     r = session.put(f"{BASE}/api/v1/dataset/{dataset_id}", json={"metrics": ALL_METRICS})
     if r.status_code == 200:
-        ok(f"{len(ALL_METRICS)} métricas aplicadas (replace completo)")
+        ok(f"{len(ALL_METRICS)} metrics applied (full replace)")
     else:
-        print(f"  ✗ métricas: {r.status_code} {r.text[:200]}", file=sys.stderr)
+        print(f"  ✗ metrics: {r.status_code} {r.text[:200]}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -293,7 +293,7 @@ def bar(metrics: list, y_label: str, ds: str, color_scheme: str = "d3Category10"
         stack: bool = False, y_fmt: str = ",d") -> dict:
     return {"viz_type": "echarts_timeseries_bar", "datasource": ds, "metrics": metrics,
             "x_axis": "DELIVERED_AT", "time_grain_sqla": "P1M", "time_range": "No filter",
-            "x_axis_title": "Mês", "y_axis_title": y_label,
+            "x_axis_title": "Month", "y_axis_title": y_label,
             "x_axis_time_format": "%b/%Y", "tooltipTimeFormat": "%b/%Y",
             "y_axis_format": y_fmt, "rich_tooltip": True,
             "stack": stack, "color_scheme": color_scheme}
@@ -345,7 +345,7 @@ def create_dashboard(session: requests.Session, title: str, charts_def: list, ro
         skip(f"dashboard '{title}'")
         return None
 
-    # Criar charts
+    # Create charts
     chart_ids = []
     for name, viz_type, params in charts_def:
         r = session.post(f"{BASE}/api/v1/chart/", json={
@@ -356,17 +356,17 @@ def create_dashboard(session: requests.Session, title: str, charts_def: list, ro
         cid = r.json()["id"]
         chart_ids.append(cid)
 
-    # Criar dashboard
+    # Create dashboard
     r = session.post(f"{BASE}/api/v1/dashboard/", json={
         "dashboard_title": title, "published": True
     })
     dash_id = r.json()["id"]
 
-    # Linkar charts
+    # Link charts
     for cid in chart_ids:
         session.put(f"{BASE}/api/v1/chart/{cid}", json={"dashboards": [dash_id]})
 
-    # Aplicar layout
+    # Apply layout
     pos = build_position_json(title, chart_ids, rows)
     session.put(f"{BASE}/api/v1/dashboard/{dash_id}", json={
         "position_json": json.dumps(pos),
@@ -386,68 +386,68 @@ def setup_dashboards(session: requests.Session, ds_id: int):
     DS = f"{ds_id}__table"
     log(f"  dataset id={ds_id} → datasource '{DS}'")
 
-    # ── Volume & Funil Operacional ────────────────────────────────────────────
-    create_dashboard(session, "Volume & Funil Operacional", [
-        ("Total de Cargas",         "big_number_total",       kpi("total_loads",          DS)),
-        ("Taxa de Cancelamento",    "big_number_total",       kpi("cancellation_rate",    DS)),
-        ("% Cargas Contratadas",    "big_number_total",       kpi("contracted_load_rate", DS)),
-        ("Transit Time Médio",      "big_number_total",       kpi("avg_transit_days",     DS)),
-        ("Lead Time Quote→Book",    "big_number_total",       kpi("avg_lead_time_booking",DS)),
-        ("Lead Time Book→Source",   "big_number_total",       kpi("avg_lead_time_sourcing",DS)),
-        ("Evolução Mensal de Cargas","echarts_timeseries_bar",bar(["total_loads"],          "Cargas", DS, color_scheme="supersetColors")),
-        ("Cargas Ativas vs Canceladas","echarts_timeseries_bar",bar(["active_loads","cancelled_loads"],"Cargas",DS)),
+    # ── Volume & operational funnel ────────────────────────────────────────────
+    create_dashboard(session, "Volume & Operational Funnel", [
+        ("Total loads",         "big_number_total",       kpi("total_loads",          DS)),
+        ("Cancellation rate",    "big_number_total",       kpi("cancellation_rate",    DS)),
+        ("% contracted loads",    "big_number_total",       kpi("contracted_load_rate", DS)),
+        ("Avg transit time",      "big_number_total",       kpi("avg_transit_days",     DS)),
+        ("Lead time quote→book",    "big_number_total",       kpi("avg_lead_time_booking",DS)),
+        ("Lead time book→source",   "big_number_total",       kpi("avg_lead_time_sourcing",DS)),
+        ("Monthly load trend","echarts_timeseries_bar",bar(["total_loads"],          "Loads", DS, color_scheme="supersetColors")),
+        ("Active vs cancelled loads","echarts_timeseries_bar",bar(["active_loads","cancelled_loads"],"Loads",DS)),
     ], rows=[([0,1,2], 25), ([3,4,5], 25), ([6,7], 35)], existing_dash_titles=existing_titles, ds_id=ds_id)
 
-    # ── Saúde Financeira ──────────────────────────────────────────────────────
-    create_dashboard(session, "Saúde Financeira", [
-        ("Receita Total",            "big_number_total",        kpi("total_revenue",    DS)),
-        ("Custo Total",              "big_number_total",        kpi("total_cost",       DS)),
-        ("PnL Total",                "big_number_total",        kpi("total_pnl",        DS)),
-        ("Margem %",                 "big_number_total",        kpi("margin_pct",       DS)),
-        ("Book Price Médio",         "big_number_total",        kpi("avg_book_price",   DS)),
-        ("PnL Médio",                "big_number_total",        kpi("avg_pnl",          DS)),
-        ("Spread Book vs Source",    "big_number_total",        kpi("spread_price",     DS)),
-        ("Receita por Milha",        "big_number_total",        kpi("revenue_per_mile", DS)),
-        ("Custo por Milha",          "big_number_total",        kpi("cost_per_mile",    DS)),
-        ("PnL por Milha",            "big_number_total",        kpi("pnl_per_mile",     DS)),
-        ("Receita vs Custo Mensal",  "echarts_timeseries_bar",  bar(["total_revenue","total_cost"],"USD",DS,y_fmt="$,.0f")),
-        ("Evolução do PnL Mensal",   "echarts_timeseries_bar",  bar(["total_pnl"],"USD",DS,color_scheme="supersetColors",y_fmt="$,.0f")),
+    # ── Financial health ──────────────────────────────────────────────────────
+    create_dashboard(session, "Financial Health", [
+        ("Total revenue",            "big_number_total",        kpi("total_revenue",    DS)),
+        ("Total cost",              "big_number_total",        kpi("total_cost",       DS)),
+        ("Total PnL",                "big_number_total",        kpi("total_pnl",        DS)),
+        ("Margin %",                 "big_number_total",        kpi("margin_pct",       DS)),
+        ("Avg book price",         "big_number_total",        kpi("avg_book_price",   DS)),
+        ("Avg PnL",                "big_number_total",        kpi("avg_pnl",          DS)),
+        ("Book vs source spread",    "big_number_total",        kpi("spread_price",     DS)),
+        ("Revenue per mile",        "big_number_total",        kpi("revenue_per_mile", DS)),
+        ("Cost per mile",          "big_number_total",        kpi("cost_per_mile",    DS)),
+        ("PnL per mile",            "big_number_total",        kpi("pnl_per_mile",     DS)),
+        ("Monthly revenue vs cost",  "echarts_timeseries_bar",  bar(["total_revenue","total_cost"],"USD",DS,y_fmt="$,.0f")),
+        ("Monthly PnL trend",   "echarts_timeseries_bar",  bar(["total_pnl"],"USD",DS,color_scheme="supersetColors",y_fmt="$,.0f")),
     ], rows=[([0,1,2,3], 25), ([4,5,6], 25), ([7,8,9], 25), ([10,11], 35)], existing_dash_titles=existing_titles, ds_id=ds_id)
 
-    # ── Desempenho de Carrier ─────────────────────────────────────────────────
-    create_dashboard(session, "Desempenho de Carrier", [
-        ("On-Time to Pickup %",          "big_number_total",        kpi("on_time_pickup_rate",   DS)),
-        ("On-Time to Delivery %",        "big_number_total",        kpi("on_time_delivery_rate", DS)),
-        ("On-Time Overall %",            "big_number_total",        kpi("on_time_overall_rate",  DS)),
-        ("% Cargas VIP Carrier",         "big_number_total",        kpi("vip_carrier_rate",      DS)),
-        ("Total de Drops",               "big_number_total",        kpi("total_carrier_drops",   DS)),
-        ("Gap Pickup vs Delivery",       "big_number_total",        kpi("on_time_delta",         DS)),
-        ("Taxas On-Time Mensais",        "echarts_timeseries_bar",  bar(["on_time_pickup_rate","on_time_delivery_rate","on_time_overall_rate"],"Taxa",DS,y_fmt=".1%")),
-        ("Drops e VIP Carriers Mensais", "echarts_timeseries_bar",  bar(["total_carrier_drops","vip_carrier_loads"],"Contagem",DS)),
+    # ── Carrier performance ─────────────────────────────────────────────────
+    create_dashboard(session, "Carrier Performance", [
+        ("On-time to pickup %",          "big_number_total",        kpi("on_time_pickup_rate",   DS)),
+        ("On-time to delivery %",        "big_number_total",        kpi("on_time_delivery_rate", DS)),
+        ("On-time overall %",            "big_number_total",        kpi("on_time_overall_rate",  DS)),
+        ("% VIP carrier loads",         "big_number_total",        kpi("vip_carrier_rate",      DS)),
+        ("Total carrier drops",               "big_number_total",        kpi("total_carrier_drops",   DS)),
+        ("Pickup vs delivery gap",       "big_number_total",        kpi("on_time_delta",         DS)),
+        ("Monthly on-time rates",        "echarts_timeseries_bar",  bar(["on_time_pickup_rate","on_time_delivery_rate","on_time_overall_rate"],"Rate",DS,y_fmt=".1%")),
+        ("Monthly drops and VIP loads", "echarts_timeseries_bar",  bar(["total_carrier_drops","vip_carrier_loads"],"Count",DS)),
     ], rows=[([0,1,2], 25), ([3,4,5], 25), ([6,7], 35)], existing_dash_titles=existing_titles, ds_id=ds_id)
 
-    # ── Autonomia Operacional ─────────────────────────────────────────────────
-    create_dashboard(session, "Autonomia Operacional", [
-        ("Bookings Autônomos",              "big_number_total",       kpi("autonomously_booked",     DS)),
-        ("Sourcings Autônomos",             "big_number_total",       kpi("autonomously_sourced",    DS)),
-        ("Cargas 100% Autônomas",           "big_number_total",       kpi("fully_autonomous_loads",  DS)),
-        ("Taxa de Booking Autônomo",        "big_number_total",       kpi("autonomous_booking_rate", DS)),
-        ("Taxa de Sourcing Autônomo",       "big_number_total",       kpi("autonomous_sourcing_rate",DS)),
-        ("Taxa de Intervenção Humana",      "big_number_total",       kpi("human_intervention_rate", DS)),
-        ("Evolução das Taxas de Autonomia", "echarts_timeseries_bar", bar(["autonomous_booking_rate","autonomous_sourcing_rate","fully_autonomous_rate"],"Taxa",DS,y_fmt=".1%")),
-        ("Cargas Autônomas vs Intervenção", "echarts_timeseries_bar", bar(["fully_autonomous_loads","autonomously_booked","autonomously_sourced"],"Cargas",DS)),
+    # ── Operational autonomy ─────────────────────────────────────────────────
+    create_dashboard(session, "Operational Autonomy", [
+        ("Autonomous bookings",              "big_number_total",       kpi("autonomously_booked",     DS)),
+        ("Autonomous sourcings",             "big_number_total",       kpi("autonomously_sourced",    DS)),
+        ("100% autonomous loads",           "big_number_total",       kpi("fully_autonomous_loads",  DS)),
+        ("Autonomous booking rate",        "big_number_total",       kpi("autonomous_booking_rate", DS)),
+        ("Autonomous sourcing rate",       "big_number_total",       kpi("autonomous_sourcing_rate",DS)),
+        ("Human intervention rate",      "big_number_total",       kpi("human_intervention_rate", DS)),
+        ("Autonomy rate trend", "echarts_timeseries_bar", bar(["autonomous_booking_rate","autonomous_sourcing_rate","fully_autonomous_rate"],"Rate",DS,y_fmt=".1%")),
+        ("Autonomous loads vs intervention", "echarts_timeseries_bar", bar(["fully_autonomous_loads","autonomously_booked","autonomously_sourced"],"Loads",DS)),
     ], rows=[([0,1,2], 25), ([3,4,5], 25), ([6,7], 35)], existing_dash_titles=existing_titles, ds_id=ds_id)
 
-    # ── Tracking & Visibilidade ───────────────────────────────────────────────
-    create_dashboard(session, "Tracking & Visibilidade", [
-        ("Cobertura Mobile App %",       "big_number_total",       kpi("mobile_tracking_rate",     DS)),
-        ("Cobertura Macropoint %",       "big_number_total",       kpi("macropoint_tracking_rate", DS)),
-        ("Cobertura EDI %",              "big_number_total",       kpi("edi_tracking_rate",        DS)),
-        ("Cobertura Total %",            "big_number_total",       kpi("total_tracking_coverage",  DS)),
-        ("Cargas com Algum Tracking",    "big_number_total",       kpi("any_tracked",              DS)),
-        ("Cargas sem Tracking %",        "big_number_total",       kpi("blind_shipment_rate",      DS)),
-        ("Cobertura de Tracking Mensal", "echarts_timeseries_bar", bar(["mobile_tracking_rate","macropoint_tracking_rate","edi_tracking_rate","total_tracking_coverage"],"Taxa",DS,y_fmt=".1%")),
-        ("Cargas Rastreadas vs Cegas",   "echarts_timeseries_bar", bar(["any_tracked","mobile_tracked","macropoint_tracked","edi_tracked"],"Contagem",DS)),
+    # ── Tracking & visibility ───────────────────────────────────────────────
+    create_dashboard(session, "Tracking & Visibility", [
+        ("Mobile app coverage %",       "big_number_total",       kpi("mobile_tracking_rate",     DS)),
+        ("Macropoint coverage %",       "big_number_total",       kpi("macropoint_tracking_rate", DS)),
+        ("EDI coverage %",              "big_number_total",       kpi("edi_tracking_rate",        DS)),
+        ("Total coverage %",            "big_number_total",       kpi("total_tracking_coverage",  DS)),
+        ("Loads with any tracking",    "big_number_total",       kpi("any_tracked",              DS)),
+        ("Loads with no tracking %",        "big_number_total",       kpi("blind_shipment_rate",      DS)),
+        ("Monthly tracking coverage", "echarts_timeseries_bar", bar(["mobile_tracking_rate","macropoint_tracking_rate","edi_tracking_rate","total_tracking_coverage"],"Rate",DS,y_fmt=".1%")),
+        ("Tracked vs blind loads",   "echarts_timeseries_bar", bar(["any_tracked","mobile_tracked","macropoint_tracked","edi_tracked"],"Count",DS)),
     ], rows=[([0,1,2,3], 25), ([4,5], 25), ([6,7], 35)], existing_dash_titles=existing_titles, ds_id=ds_id)
 
 
@@ -470,7 +470,7 @@ def main():
     setup_dashboards(session, main_ds_id)
 
     print("\n" + "=" * 50)
-    print(f"  ✓ Bootstrap concluído → {BASE}")
+    print(f"  ✓ Bootstrap complete → {BASE}")
     print("=" * 50)
 
 

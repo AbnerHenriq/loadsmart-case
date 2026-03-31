@@ -11,7 +11,7 @@ import duckdb
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-# colunas do export conforme PRD
+# Export columns per PRD
 COLUMNS = {
     "LOADSMART_ID": "loadsmart_id",
     "SHIPPER_NAME": "shipper_name",
@@ -35,13 +35,13 @@ def export(db_path, output_dir="data/exports"):
     """).fetchone()[0]
 
     if max_date_raw is None:
-        raise ValueError("Nenhuma entrega encontrada.")
+        raise ValueError("No deliveries found.")
 
     max_date = max_date_raw.date() if hasattr(max_date_raw, "date") else max_date_raw
     start = max_date.replace(day=1)
     end = start + relativedelta(months=1)
 
-    print(f"Exportando: {start.strftime('%B %Y')} ({start} até {end})")
+    print(f"Exporting: {start.strftime('%B %Y')} ({start} to {end})")
 
     df = con.execute("""
         SELECT
@@ -72,7 +72,7 @@ def export(db_path, output_dir="data/exports"):
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df_out.to_csv(output_path, index=False)
 
-    print(f"CSV salvo: {output_path} ({len(df_out)} linhas)")
+    print(f"CSV saved: {output_path} ({len(df_out)} rows)")
     return str(output_path), df_out, start
 
 
@@ -85,7 +85,7 @@ def send_email(df, smtp_config, recipients, subject, filename):
     msg["From"] = smtp_config["user"]
     msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject
-    msg.attach(email.mime.text.MIMEText("Segue em anexo o CSV do último mês.", "plain"))
+    msg.attach(email.mime.text.MIMEText("Please find attached the CSV for the last completed month.", "plain"))
 
     attachment = email.mime.base.MIMEBase("application", "octet-stream")
     attachment.set_payload(csv_bytes)
@@ -98,7 +98,7 @@ def send_email(df, smtp_config, recipients, subject, filename):
         server.login(smtp_config["user"], smtp_config["password"])
         server.sendmail(smtp_config["user"], recipients, msg.as_string())
 
-    print(f"E-mail enviado para: {', '.join(recipients)}")
+    print(f"Email sent to: {', '.join(recipients)}")
 
 
 def run(db_path, output_dir="data/exports"):
@@ -110,7 +110,7 @@ def run(db_path, output_dir="data/exports"):
     recipients_raw = os.environ.get("SMTP_RECIPIENTS", "")
 
     if not all([host, user, password, recipients_raw]):
-        print("SMTP não configurado, pulando envio de e-mail.")
+        print("SMTP not configured, skipping email.")
         return
 
     smtp_config = {

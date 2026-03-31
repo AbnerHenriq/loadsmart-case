@@ -1,110 +1,128 @@
 # CLAUDE.md — Loadsmart Analytics Case
 
-Contexto persistente para sessões de IA neste projeto.
+Persistent context for AI sessions in this project.
 
 ---
 
-## Projeto
+## Project
 
-Pipeline de analytics para dados de shipments da Loadsmart.
-Stack: **DuckDB + dbt-core + Apache Airflow + Apache Superset**, tudo em Docker Compose.
+Analytics pipeline for Loadsmart shipment data.
+Stack: **DuckDB + dbt-core + Apache Airflow + Apache Superset**, all via Docker Compose.
 
-Fluxo: `CSV → raw.shipments (ingest.py) → stg_ → int_ → mart.* → Superset dashboards`
+Flow: `CSV → raw.shipments (ingest.py) → stg_ → int_ → mart.* → Superset dashboards`
 
-Para subir o ambiente: `make setup` (Docker necessário).
-Para resetar do zero: `make reset`.
+Bring up the environment: `make setup` (Docker required).
+Full reset from scratch: `make reset`.
 
 ---
 
-## Convenções SQL
+## SQL conventions
 
-### Palavras-chave em MAIÚSCULO
+### SQL keywords in UPPERCASE
 
-Todas as palavras reservadas SQL devem ser escritas em MAIÚSCULO nos arquivos dbt:
+All reserved SQL words must be written in UPPERCASE in dbt files:
 `SELECT`, `FROM`, `AS`, `WHERE`, `WITH`, `JOIN`, `ON`, `CASE`, `WHEN`, `THEN`, `ELSE`, `END`,
 `QUALIFY`, `PARTITION BY`, `ORDER BY`, `GROUP BY`, `COALESCE`, `NULLIF`, `TRIM`, `ROUND`, etc.
 
-### Aliases de coluna em UPPERCASE no mart
+### Columns: lowercase in stg/int, UPPERCASE only in the final `SELECT` of the mart
 
-Toda coluna exposta nos modelos `mart/` deve ter alias em `UPPERCASE`.
-A Superset API retorna os nomes exatamente como estão no DuckDB — o bootstrap usa esses
-nomes para `groupby`, filtros e métricas. Divergência de case quebra charts em runtime.
+- **`staging/` and `intermediate/`:** column identifiers in **lowercase snake_case**
+  (`loadsmart_id`, `booked_at`, `carrier_name`). Easier to read and matches `schema.yml`.
 
-```sql
--- CORRETO
-SELECT carrier_name AS CARRIER_NAME FROM ...
-```
+- **`mart/` (facts and dims):** in the model’s **final `SELECT`**, every column exposed to
+  consumers (Superset) must use an **`UPPERCASE`** alias (`AS CARRIER_NAME`,
+  `AS LOADSMART_ID`). The Superset API returns names exactly as in DuckDB — the bootstrap
+  uses them for `groupby`, filters, and metrics; case mismatch breaks charts.
 
-### Timestamps via macro `parse_ts`
-
-Nunca usar `strptime()` diretamente. Usar o macro em `dbt/macros/parse_ts.sql`:
+Inner CTEs inside a `mart/` file keep intermediate columns in lowercase; only the final
+layer applies `AS ...` in uppercase.
 
 ```sql
-{{ parse_ts('book_date') }}   -- não: strptime(book_date, '%m/%d/%Y %H:%M')
+-- Inner CTE (lowercase)
+SELECT carrier_name, book_price FROM ...
+
+-- Final mart SELECT (UPPERCASE)
+SELECT
+    carrier_name AS CARRIER_NAME,
+    book_price   AS BOOK_PRICE
+FROM ...
 ```
 
-### Refs e sources sem hardcode
+### Descriptive table aliases
+
+Avoid opaque one-letter aliases (`s`, `ds`) in `JOIN`. Prefer names that show role
+(`shipment`, `carrier_dim`, `shipper_dim`). Details: `.claude/commands/001-sql-best-practices.md`.
+
+### Timestamps via `parse_ts` macro
+
+Never use `strptime()` directly. Use the macro in `dbt/macros/parse_ts.sql`:
 
 ```sql
-FROM {{ source('raw', 'shipments') }}   -- não: FROM raw.shipments
-FROM {{ ref('fct_shipments') }}         -- não: FROM mart.fct_shipments
+{{ parse_ts('book_date') }}   -- not: strptime(book_date, '%m/%d/%Y %H:%M')
 ```
 
-### Outras regras obrigatórias
+### Refs and sources — no hardcoded schema
 
-- **CTEs** sobre subqueries inline
-- **QUALIFY** para deduplicação (`ROW_NUMBER() OVER (PARTITION BY ...)`)
-- **`NULLIF(TRIM(col), '')`** para colunas string vindas de fonte externa
-- **`COALESCE(fk, 'unknown-...')`** para FKs de dimensão que podem ser NULL
-- **`CASE WHEN denominador > 0 THEN ... ELSE NULL END`** antes de qualquer divisão
-- **`SELECT *` proibido** em modelos `mart/` (listar colunas explicitamente)
+```sql
+FROM {{ source('raw', 'shipments') }}   -- not: FROM raw.shipments
+FROM {{ ref('fct_shipments') }}         -- not: FROM mart.fct_shipments
+```
 
----
+### Other mandatory rules
 
-## Fronteiras de camada dbt
-
-| Camada | Schema DuckDB | Materialização | Responsabilidade |
-|--------|--------------|----------------|-----------------|
-| `staging/` | `staging` | view | Parse, limpeza, tipagem, dedup |
-| `intermediate/` | `intermediate` | table | Métricas derivadas, enriquecimento |
-| `mart/` | `mart` | table | Fact/dim expostos ao Superset |
-
-Lógica de negócio **nunca** em staging. Joins com dimensões finais **nunca** em intermediate.
+- **CTEs** instead of inline subqueries
+- **QUALIFY** for deduplication (`ROW_NUMBER() OVER (PARTITION BY ...)`)
+- **`NULLIF(TRIM(col), '')`** for string columns from external sources
+- **`COALESCE(fk, 'unknown-...')`** for dimension FKs that may be NULL
+- **`CASE WHEN denominator > 0 THEN ... ELSE NULL END`** before any division
+- **`SELECT *` forbidden** in `mart/` models (list columns explicitly)
 
 ---
 
-## Nomenclatura de documentos
+## dbt layer boundaries
 
-| Prefixo | Tipo | Onde fica |
-|---------|------|-----------|
-| `rbk0XX` | Runbook (guia de referência) | `docs/runbooks/` |
-| `0XX` | Comando Claude invocável | `.claude/commands/` |
-| `cur0XX` | Regra do Cursor | `.cursor/rules/` |
+| Layer | DuckDB schema | Materialization | Responsibility |
+|--------|--------------|-----------------|----------------|
+| `staging/` | `staging` | view | Parse, cleanup, typing, dedup |
+| `intermediate/` | `intermediate` | table | Derived metrics, enrichment |
+| `mart/` | `mart` | table | Facts/dims exposed to Superset |
 
-Análises exploratórias ficam em `docs/analysis/` (sem prefixo numérico).
-
----
-
-## Comandos Claude disponíveis
-
-| Comando | O que faz |
-|---------|-----------|
-| `/001-sql-best-practices` | Revisa SQL contra as 10 regras do projeto |
-| `/002-pr-review` | Revisão completa de PR: SQL + camadas + testes + impacto nos dados |
-| `/003-create-dashboard` | Executa o runbook `rbk005` para criar dashboard no Superset |
-
-O `/002-pr-review` chama `/001-sql-best-practices` automaticamente para todo `.sql` alterado.
+Business logic **never** in staging. Joins to final dimensions **never** in intermediate.
 
 ---
 
-## Dados — notas importantes
+## Document naming
 
-- **5.357 shipments** após deduplicação (4 pares de linhas idênticas removidos em staging)
-- **`carrier_sk = 'unknown-carrier'`** é o sentinel para cargas sem carrier (499 casos, maioria cancelada)
-- **PnL** é sempre recalculado como `book_price - source_price` — o campo `pnl` do raw tem 24 inconsistências
-- **`IS_MILEAGE_VALID`** filtra as 45 cargas com `mileage = 0` para análises de custo/milha
-- **`DELIVERED_ON_TIME`** inclui 467 casos onde `delivered_at < pickup_at` — flag exposta, não filtrada
-- 9 achados de qualidade documentados em `docs/analysis/raw-data-findings.md`
+| Prefix | Type | Location |
+|--------|------|----------|
+| `rbk0XX` | Runbook (reference guide) | `docs/runbooks/` |
+| `0XX` | Invocable Claude command | `.claude/commands/` |
+| `cur0XX` | Cursor rule | `.cursor/rules/` |
+
+Exploratory analyses live in `docs/analysis/` (no numeric prefix).
+
+---
+
+## Available Claude commands
+
+| Command | What it does |
+|---------|----------------|
+| `/001-sql-best-practices` | Reviews SQL against project rules (`001-sql-best-practices.md`) |
+| `/002-pr-review` | Full PR review: SQL + layers + tests + data impact |
+| `/003-create-dashboard` | Runs runbook `rbk005` to create a Superset dashboard |
+
+`/002-pr-review` calls `/001-sql-best-practices` automatically for every changed `.sql` file.
+
+---
+
+## Data — important notes
+
+- **5,357 shipments** after deduplication (4 pairs of identical rows removed in staging)
+- **`carrier_sk = 'unknown-carrier'`** is the sentinel for loads without a carrier (499 cases, mostly cancelled)
+- **PnL** is always recomputed as `book_price - source_price` — the raw `pnl` field has 24 inconsistencies
+- **`IS_MILEAGE_VALID`** filters the 45 loads with `mileage = 0` for cost-per-mile analysis
+- **`DELIVERED_ON_TIME`** includes 467 cases where `delivered_at < pickup_at` — flag exposed, not filtered
+- 9 data-quality findings documented in `docs/analysis/raw-data-findings.md`
 
 ---
 
@@ -112,8 +130,8 @@ O `/002-pr-review` chama `/001-sql-best-practices` automaticamente para todo `.s
 
 - UI: `http://localhost:8088` (admin / admin)
 - Airflow: `http://localhost:9090` (admin / admin)
-- Dataset principal: `fct_shipments` (id=1)
-- Bootstrap idempotente: `scripts/superset_bootstrap.py` (pode ser re-executado com segurança)
-- Pitfall crítico: usar `echarts_timeseries_bar` (não `bar`); colunas em `groupby` devem ser UPPERCASE
+- Main dataset: `fct_shipments` (id=1)
+- Idempotent bootstrap: `scripts/superset_bootstrap.py` (safe to re-run)
+- Critical pitfall: use `echarts_timeseries_bar` (not `bar`); `groupby` columns must be UPPERCASE
 
-Runbooks de referência: `docs/runbooks/rbk001` a `rbk005`.
+Reference runbooks: `docs/runbooks/rbk001` through `rbk005`.
