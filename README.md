@@ -134,10 +134,7 @@ jupyter notebook notebooks/loadsmart_analysis.ipynb
 
 O notebook contém:
 
-- `split_lane(lane)` — parseia `"City,ST -> City,ST"` em dict
-- `send_csv_email(df, recipients, smtp_config)` — envia CSV por e-mail via SMTP
-- `send_csv_sftp(df, remote_path, credentials)` — upload de CSV via SFTP
-- Query e exportação das entregas do último mês
+- `split_lane(lane)` — parseia `"City,ST -> City,ST"` em dict com pickup/delivery city e state
 
 ---
 
@@ -188,8 +185,7 @@ source .venv/bin/activate
 python scripts/export_last_month.py
 ```
 
-Ou no Jupyter: execute a célula 6 (Last-Month Export) e descomente o bloco
-`send_csv_email_from_path(...)` na última célula.
+Ou re-triggar o DAG `loadsmart_pipeline` no Airflow — a task `export_last_month` cuida do envio automaticamente.
 
 #### Como funciona no Docker / Airflow
 
