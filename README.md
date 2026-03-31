@@ -3,14 +3,14 @@
 ## Stack
 
 
-| Component        | Technology             |
-| ---------------- | ---------------------- |
-| Data warehouse   | DuckDB (local file)    |
-| Transformation   | dbt-core + dbt-duckdb  |
-| Orchestration    | Apache Airflow 2.9     |
-| Visualization    | Apache Superset        |
-| Analysis / export | Jupyter Notebook       |
-| Infrastructure   | Docker Compose         |
+| Component         | Technology            |
+| ----------------- | --------------------- |
+| Data warehouse    | DuckDB (local file)   |
+| Transformation    | dbt-core + dbt-duckdb |
+| Orchestration     | Apache Airflow 2.9    |
+| Visualization     | Apache Superset       |
+| Analysis / export | Jupyter Notebook      |
+| Infrastructure    | Docker Compose        |
 
 
 ---
@@ -26,7 +26,7 @@
 ## Project layout
 
 ```
-loadsmart_case/
+loadsmart-case/
 ├── Makefile                           # make setup / reset / teardown
 ├── docker-compose.yml                 # Airflow + Superset + DuckDB
 ├── docker/superset/
@@ -72,42 +72,29 @@ loadsmart_case/
 **Environment file:** `.env` is not in the repository (secrets stay local). After cloning, copy the template once, then run setup:
 
 ```bash
-git clone <repo-url>
-cd loadsmart_case
+git clone https://github.com/AbnerHenriq/loadsmart-case.git
+cd loadsmart-case
 cp .env.example .env
 make setup
 ```
 
-The template includes **every variable Docker Compose needs** to start Airflow and Superset: Postgres credentials, Airflow Fernet/webserver keys, and **`SUPERSET_SECRET_KEY`** (Flask session signing — do not remove that line unless you replace it with another non-empty value). Only the **SMTP_** block at the bottom is optional (email export).
-
 You can edit `.env` later to rotate secrets or to enable SMTP for the monthly export (see [Monthly export by email](#monthly-export-by-email)). The values in `.env.example` are enough for a first local run.
 
-`make setup` starts all containers, runs the data pipeline (ingest → dbt run → dbt test), and configures Superset automatically. When it finishes, open:
+`make setup` starts all containers, runs the data pipeline (ingest → dbt run → dbt test -> send to email), and configures Superset automatically. When it finishes, open:
 
 - **Superset:** [http://localhost:8088](http://localhost:8088) — login `admin` / `admin`
 - **Airflow:** [http://localhost:9090](http://localhost:9090) — login `admin` / `admin`
 
 Superset comes up with 6 dashboards, 48 metrics, and the DuckDB connection wired.
-
-### What each variable is for
-
-| Variable | Required for `make setup`? | Used by |
-| -------- | -------------------------- | ------- |
-| `POSTGRES_*` | Yes | Airflow metadata DB — must match the `postgres_meta` service in `docker-compose.yml` (used in `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN`). |
-| `AIRFLOW__CORE__FERNET_KEY` | Yes | Airflow — encrypts connections and sensitive config. |
-| `AIRFLOW__WEBSERVER__SECRET_KEY` | Yes | Airflow webserver session signing. |
-| `SUPERSET_SECRET_KEY` | Yes | Superset — Flask `SECRET_KEY` in `docker/superset/superset_config.py` (sessions, CSRF); Compose passes it to `superset`, `superset-init`, and `superset-mcp`. |
-| `SMTP_*` | No | `export_last_month` in Airflow and `scripts/export_last_month.py` (email only). |
+                                                                      |
 
 ### Other commands
 
 ```bash
-make status      # container status and last pipeline run
-make reset       # tear down everything and rebuild from scratch (teardown + setup)
-make teardown    # remove containers, volumes, and local images
-make open        # open Airflow and Superset in the browser
-make logs-pipeline   # data pipeline logs
-make logs-bootstrap  # automatic Superset setup logs
+
+make setup # setup airflow, dbt, superset configuration
+make reset # drop everything and start again (setup)
+
 ```
 
 ### Locally (without Docker)
@@ -206,15 +193,6 @@ python scripts/export_last_month.py
 
 Or re-trigger the `loadsmart_pipeline` DAG in Airflow — the `export_last_month` task handles sending.
 
-#### How it works in Docker / Airflow
-
-Docker Compose loads `.env` via `env_file: .env`. After you add or change SMTP
-variables, restart the stack (`docker compose up -d --build`) or at least re-trigger
-the `loadsmart_pipeline` DAG so the scheduler picks up the new environment.
-The `export_last_month` task runs automatically after `dbt_test`.
-
----
-
 ## Exploring DuckDB
 
 The database file is `data/loadsmart.duckdb` after the pipeline runs.
@@ -258,20 +236,6 @@ df = con.execute("SELECT * FROM main_mart.fct_shipments LIMIT 20").df()
 print(df)
 ```
 
-### Via DBeaver
-
-1. Open DBeaver and click **New Database Connection**
-2. Select **DuckDB**
-  - If it doesn’t appear, go to **Driver Manager → New** and add the DuckDB JDBC driver
-  - Driver download: [duckdb.org/docs/api/java](https://duckdb.org/docs/api/java)
-3. In **Path**, point to `data/loadsmart.duckdb` inside the repo directory
-4. Click **Test Connection** → **Finish**
-5. In the object tree, navigate: `loadsmart.duckdb → main_mart → Tables`
-
-> **Note:** DuckDB allows **only one write connection at a time**. If Airflow or dbt
-> has the file open, DBeaver may connect read-only. Stop other processes before opening
-> in DBeaver if you need to edit data.
-
 ---
 
 ## Dimensional model (star schema)
@@ -284,29 +248,28 @@ print(df)
                └───fct_shipments───┘
                       │
                  dim_location
-              (pickup + delivery)
 ```
 
 
-| Table           | Schema       | Rows | Description                                      |
-| --------------- | ------------ | ---- | ------------------------------------------------ |
-| `raw.shipments` | raw          | 5,361 | Raw CSV data                                   |
-| `int_shipments` | intermediate | 5,357 | Deduplicated + derived metrics                   |
-| `dim_carrier`   | mart         | 2,203 | Unique carriers + “Unknown” sentinel           |
-| `dim_shipper`   | mart         | 94   | Unique shippers                                |
-| `dim_location`  | mart         | 988  | Unique cities/states (origin + destination)     |
-| `dim_date`      | mart         | 438  | Calendar covering the full data period          |
-| `fct_shipments` | mart         | 5,357 | Central fact — one row per shipment             |
+| Table           | Schema       | Rows  | Description                                 |
+| --------------- | ------------ | ----- | ------------------------------------------- |
+| `raw.shipments` | raw          | 5,361 | Raw CSV data                                |
+| `int_shipments` | intermediate | 5,357 | Deduplicated + derived metrics              |
+| `dim_carrier`   | mart         | 2,203 | Unique carriers + “Unknown” sentinel        |
+| `dim_shipper`   | mart         | 94    | Unique shippers                             |
+| `dim_location`  | mart         | 988   | Unique cities/states (origin + destination) |
+| `dim_date`      | mart         | 438   | Calendar covering the full data period      |
+| `fct_shipments` | mart         | 5,357 | Central fact — one row per shipment         |
 
 
 ### dbt layers
 
 
-| Layer        | Materialization | Purpose                                      |
-| ------------ | --------------- | -------------------------------------------- |
-| staging      | view            | Cleanup, typing, parsing the `lane` field   |
-| intermediate | table           | Deduplication, derived metrics               |
-| mart         | table           | Dimensions and fact ready for analysis       |
+| Layer        | Materialization | Purpose                                   |
+| ------------ | --------------- | ----------------------------------------- |
+| staging      | view            | Cleanup, typing, parsing the `lane` field |
+| intermediate | table           | Deduplication, derived metrics            |
+| mart         | table           | Dimensions and fact ready for analysis    |
 
 
 ---
@@ -317,24 +280,23 @@ All configured automatically by `superset_bootstrap.py` during `make setup`.
 
 ### Available dashboards
 
-| Dashboard | Audience | Questions answered |
-|---------------------------|----------|---------------------|
-| Financial Health | CFO / Pricing | PnL, margin, revenue per mile |
-| Volume & Operational Funnel | Ops Manager | Volume, cancellation, lead time |
-| Carrier Performance | Ops Manager | On-time rates, drops, VIP carriers |
-| Operational Autonomy | Product | Autonomous booking/sourcing vs human touch |
-| Tracking & Visibility | Product | Mobile, Macropoint, EDI coverage |
-| SLA & On-Time by Lane | Operations | On-time by lane, transit time, ranking by state |
 
-### Calculated metrics (48 total)
+| Dashboard                   | Audience      | Questions answered                         |
+| --------------------------- | ------------- | ------------------------------------------ |
+| Financial Health            | CFO / Pricing | PnL, margin, revenue per mile              |
+| Volume & Operational Funnel | Ops Manager   | Volume, cancellation, lead time            |
+| Carrier Performance         | Ops Manager   | On-time rates, drops, VIP carriers         |
+| Operational Autonomy        | Product       | Autonomous booking/sourcing vs human touch |
+| Tracking & Visibility       | Product       | Mobile, Macropoint, EDI coverage           |
 
-> **Rule:** never pre-compute ratios — always sum components before dividing.
+
+## Semantic Layer
 
 #### Domain 1 — Financial
 
 
-| Metric             | Label                 | Domain   | Owner         | SQL expression                      |
-| ------------------ | --------------------- | -------- | ------------- | ---------------------------------- |
+| Metric             | Label                 | Domain    | Owner         | SQL expression                     |
+| ------------------ | --------------------- | --------- | ------------- | ---------------------------------- |
 | `total_revenue`    | Total revenue         | Financial | CFO / Pricing | `SUM(book_price)`                  |
 | `total_cost`       | Total cost            | Financial | CFO / Pricing | `SUM(source_price)`                |
 | `total_pnl`        | Total PnL             | Financial | CFO / Pricing | `SUM(pnl)`                         |
@@ -352,8 +314,8 @@ All configured automatically by `superset_bootstrap.py` during `make setup`.
 #### Domain 2 — Volume and funnel
 
 
-| Metric                   | Label                           | Domain        | Owner       | SQL expression                                   |
-| ------------------------ | ------------------------------- | ------------- | ----------- | ----------------------------------------------- |
+| Metric                   | Label                           | Domain          | Owner       | SQL expression                                  |
+| ------------------------ | ------------------------------- | --------------- | ----------- | ----------------------------------------------- |
 | `total_loads`            | Total loads                     | Volume / Funnel | Ops Manager | `COUNT(loadsmart_id)`                           |
 | `cancelled_loads`        | Cancelled loads                 | Volume / Funnel | Ops Manager | `SUM(load_was_cancelled::int)`                  |
 | `active_loads`           | Active loads                    | Volume / Funnel | Ops Manager | `SUM((NOT load_was_cancelled)::int)`            |
@@ -368,7 +330,7 @@ All configured automatically by `superset_bootstrap.py` during `make setup`.
 #### Domain 3 — Carrier performance
 
 
-| Metric                   | Label                          | Domain  | Owner       | SQL expression                                                                                    |
+| Metric                   | Label                          | Domain  | Owner       | SQL expression                                                                                   |
 | ------------------------ | ------------------------------ | ------- | ----------- | ------------------------------------------------------------------------------------------------ |
 | `on_time_pickup_count`   | On-time pickups (count)        | Carrier | Ops Manager | `SUM(carrier_on_time_to_pickup::int)`                                                            |
 | `on_time_delivery_count` | On-time deliveries (count)     | Carrier | Ops Manager | `SUM(carrier_on_time_to_delivery::int)`                                                          |
@@ -386,31 +348,31 @@ All configured automatically by `superset_bootstrap.py` during `make setup`.
 #### Domain 4 — Operational autonomy
 
 
-| Metric                     | Label                        | Domain    | Owner   | SQL expression                                                                               |
-| -------------------------- | ---------------------------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
-| `autonomously_booked`      | Autonomous bookings          | Automation | Product | `SUM(load_booked_autonomously::int)`                                                        |
-| `autonomously_sourced`     | Autonomous sourcings         | Automation | Product | `SUM(load_sourced_autonomously::int)`                                                       |
-| `fully_autonomous_loads`   | 100% autonomous loads        | Automation | Product | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int)`                        |
-| `autonomous_booking_rate`  | Autonomous booking rate %    | Automation | Product | `SUM(load_booked_autonomously::int) * 1.0 / COUNT(*)`                                       |
-| `autonomous_sourcing_rate` | Autonomous sourcing rate %   | Automation | Product | `SUM(load_sourced_autonomously::int) * 1.0 / COUNT(*)`                                      |
-| `fully_autonomous_rate`    | 100% autonomous rate %       | Automation | Product | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)`       |
-| `human_intervention_rate`  | Human intervention rate %    | Automation | Product | `1.0 - SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)` |
+| Metric                     | Label                      | Domain     | Owner   | SQL expression                                                                              |
+| -------------------------- | -------------------------- | ---------- | ------- | ------------------------------------------------------------------------------------------- |
+| `autonomously_booked`      | Autonomous bookings        | Automation | Product | `SUM(load_booked_autonomously::int)`                                                        |
+| `autonomously_sourced`     | Autonomous sourcings       | Automation | Product | `SUM(load_sourced_autonomously::int)`                                                       |
+| `fully_autonomous_loads`   | 100% autonomous loads      | Automation | Product | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int)`                        |
+| `autonomous_booking_rate`  | Autonomous booking rate %  | Automation | Product | `SUM(load_booked_autonomously::int) * 1.0 / COUNT(*)`                                       |
+| `autonomous_sourcing_rate` | Autonomous sourcing rate % | Automation | Product | `SUM(load_sourced_autonomously::int) * 1.0 / COUNT(*)`                                      |
+| `fully_autonomous_rate`    | 100% autonomous rate %     | Automation | Product | `SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)`       |
+| `human_intervention_rate`  | Human intervention rate %  | Automation | Product | `1.0 - SUM((load_booked_autonomously AND load_sourced_autonomously)::int) * 1.0 / COUNT(*)` |
 
 
 #### Domain 5 — Tracking and visibility
 
 
-| Metric                     | Label                         | Domain   | Owner   | SQL expression                                                                                               |
-| -------------------------- | ----------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| `mobile_tracked`           | Loads with mobile tracking    | Tracking | Product | `SUM(has_mobile_app_tracking::int)`                                                                         |
-| `macropoint_tracked`       | Loads with Macropoint         | Tracking | Product | `SUM(has_macropoint_tracking::int)`                                                                         |
-| `edi_tracked`              | Loads with EDI                | Tracking | Product | `SUM(has_edi_tracking::int)`                                                                                |
-| `any_tracked`              | Loads with any tracking       | Tracking | Product | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int)`                        |
-| `mobile_tracking_rate`     | Mobile app coverage %         | Tracking | Product | `SUM(has_mobile_app_tracking::int) * 1.0 / COUNT(*)`                                                        |
-| `macropoint_tracking_rate` | Macropoint coverage %         | Tracking | Product | `SUM(has_macropoint_tracking::int) * 1.0 / COUNT(*)`                                                        |
-| `edi_tracking_rate`        | EDI coverage %                | Tracking | Product | `SUM(has_edi_tracking::int) * 1.0 / COUNT(*)`                                                               |
-| `total_tracking_coverage`  | Total tracking coverage %     | Tracking | Product | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)`       |
-| `blind_shipment_rate`      | Loads with no tracking %      | Tracking | Product | `1.0 - SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)` |
+| Metric                     | Label                      | Domain   | Owner   | SQL expression                                                                                              |
+| -------------------------- | -------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `mobile_tracked`           | Loads with mobile tracking | Tracking | Product | `SUM(has_mobile_app_tracking::int)`                                                                         |
+| `macropoint_tracked`       | Loads with Macropoint      | Tracking | Product | `SUM(has_macropoint_tracking::int)`                                                                         |
+| `edi_tracked`              | Loads with EDI             | Tracking | Product | `SUM(has_edi_tracking::int)`                                                                                |
+| `any_tracked`              | Loads with any tracking    | Tracking | Product | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int)`                        |
+| `mobile_tracking_rate`     | Mobile app coverage %      | Tracking | Product | `SUM(has_mobile_app_tracking::int) * 1.0 / COUNT(*)`                                                        |
+| `macropoint_tracking_rate` | Macropoint coverage %      | Tracking | Product | `SUM(has_macropoint_tracking::int) * 1.0 / COUNT(*)`                                                        |
+| `edi_tracking_rate`        | EDI coverage %             | Tracking | Product | `SUM(has_edi_tracking::int) * 1.0 / COUNT(*)`                                                               |
+| `total_tracking_coverage`  | Total tracking coverage %  | Tracking | Product | `SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)`       |
+| `blind_shipment_rate`      | Loads with no tracking %   | Tracking | Product | `1.0 - SUM((has_mobile_app_tracking OR has_macropoint_tracking OR has_edi_tracking)::int) * 1.0 / COUNT(*)` |
 
 
 ### Dashboard 1 — Operational health
@@ -418,16 +380,16 @@ All configured automatically by `superset_bootstrap.py` during `make setup`.
 **Audience:** ops manager · **Question:** did something break?
 
 
-| Chart                      | Type           | Metric(s)                                     | Dimension              |
-| -------------------------- | -------------- | ---------------------------------------------- | --------------------- |
-| On-time rate               | KPI            | `on_time_overall_rate`                         | —                     |
-| Total loads                | KPI            | `COUNT(loadsmart_id)`                          | —                     |
-| Avg transit time           | KPI            | `AVG(lead_time_days)`                          | —                     |
-| Cancellation rate          | KPI            | `cancellation_rate`                            | —                     |
-| On-time rate by carrier    | Horizontal bar | `on_time_overall_rate`                         | `carrier_name`        |
+| Chart                      | Type           | Metric(s)                                      | Dimension               |
+| -------------------------- | -------------- | ---------------------------------------------- | ----------------------- |
+| On-time rate               | KPI            | `on_time_overall_rate`                         | —                       |
+| Total loads                | KPI            | `COUNT(loadsmart_id)`                          | —                       |
+| Avg transit time           | KPI            | `AVG(lead_time_days)`                          | —                       |
+| Cancellation rate          | KPI            | `cancellation_rate`                            | —                       |
+| On-time rate by carrier    | Horizontal bar | `on_time_overall_rate`                         | `carrier_name`          |
 | Monthly on-time trend      | Line           | `on_time_overall_rate`                         | month of `delivered_at` |
-| Mix by equipment type      | Donut          | `COUNT(*)`                                     | `equipment_type`      |
-| Pickup vs delivery on-time | Grouped bar    | `on_time_pickup_rate`, `on_time_delivery_rate` | `carrier_name`        |
+| Mix by equipment type      | Donut          | `COUNT(*)`                                     | `equipment_type`        |
+| Pickup vs delivery on-time | Grouped bar    | `on_time_pickup_rate`, `on_time_delivery_rate` | `carrier_name`          |
 
 
 ### Dashboard 2 — Financial health
@@ -435,15 +397,15 @@ All configured automatically by `superset_bootstrap.py` during `make setup`.
 **Audience:** CFO / pricing analyst · **Question:** where do we profit and lose?
 
 
-| Chart                        | Type           | Metric(s)               | Dimension              |
-| ---------------------------- | -------------- | ------------------------ | --------------------- |
-| Total PnL                    | KPI            | `SUM(pnl)`               | —                     |
-| Margin %                     | KPI            | `margin_pct`             | —                     |
-| Cost per mile                | KPI            | `cost_per_mile`          | —                     |
-| Avg book price               | KPI            | `AVG(book_price)`        | —                     |
-| Margin by sourcing channel   | Horizontal bar | `margin_pct`             | `sourcing_channel`    |
-| PnL by shipper (top 10)      | Horizontal bar | `SUM(pnl)`               | `shipper_name`        |
-| Mileage vs PnL               | Scatter        | `pnl_per_mile`           | `carrier_name`        |
+| Chart                        | Type           | Metric(s)                | Dimension               |
+| ---------------------------- | -------------- | ------------------------ | ----------------------- |
+| Total PnL                    | KPI            | `SUM(pnl)`               | —                       |
+| Margin %                     | KPI            | `margin_pct`             | —                       |
+| Cost per mile                | KPI            | `cost_per_mile`          | —                       |
+| Avg book price               | KPI            | `AVG(book_price)`        | —                       |
+| Margin by sourcing channel   | Horizontal bar | `margin_pct`             | `sourcing_channel`      |
+| PnL by shipper (top 10)      | Horizontal bar | `SUM(pnl)`               | `shipper_name`          |
+| Mileage vs PnL               | Scatter        | `pnl_per_mile`           | `carrier_name`          |
 | Monthly PnL and margin trend | Line           | `SUM(pnl)`, `margin_pct` | month of `delivered_at` |
 
 
@@ -452,16 +414,16 @@ All configured automatically by `superset_bootstrap.py` during `make setup`.
 **Audience:** product / leadership · **Question:** is automation improving?
 
 
-| Chart                          | Type           | Metric(s)                                                             | Dimension              |
-| ------------------------------ | -------------- | ---------------------------------------------------------------------- | --------------------- |
-| 100% autonomous rate           | KPI            | `fully_autonomous_rate`                                                | —                     |
-| Tracking coverage              | KPI            | `total_tracking_coverage`                                              | —                     |
-| % VIP carrier loads            | KPI            | `vip_carrier_rate`                                                     | —                     |
-| Loads without tracking         | KPI            | `blind_shipment_rate`                                                  | —                     |
-| Autonomy by channel            | Horizontal bar | `fully_autonomous_rate`                                                | `sourcing_channel`    |
-| Coverage by tracking type      | Grouped bar    | `mobile/macropoint/edi_rate`                                           | —                     |
-| Monthly autonomy trend         | Line           | `fully_autonomous_rate`                                                | month of `delivered_at` |
-| Ranked carriers                | Table          | `on_time_overall_rate`, `fully_autonomous_rate`, `blind_shipment_rate` | `carrier_name`        |
+| Chart                     | Type           | Metric(s)                                                              | Dimension               |
+| ------------------------- | -------------- | ---------------------------------------------------------------------- | ----------------------- |
+| 100% autonomous rate      | KPI            | `fully_autonomous_rate`                                                | —                       |
+| Tracking coverage         | KPI            | `total_tracking_coverage`                                              | —                       |
+| % VIP carrier loads       | KPI            | `vip_carrier_rate`                                                     | —                       |
+| Loads without tracking    | KPI            | `blind_shipment_rate`                                                  | —                       |
+| Autonomy by channel       | Horizontal bar | `fully_autonomous_rate`                                                | `sourcing_channel`      |
+| Coverage by tracking type | Grouped bar    | `mobile/macropoint/edi_rate`                                           | —                       |
+| Monthly autonomy trend    | Line           | `fully_autonomous_rate`                                                | month of `delivered_at` |
+| Ranked carriers           | Table          | `on_time_overall_rate`, `fully_autonomous_rate`, `blind_shipment_rate` | `carrier_name`          |
 
 
 ---
@@ -474,14 +436,14 @@ Quality findings for the raw layer are documented in
 Summary of main points:
 
 
-| Finding                                              | Rows | Severity |
-| ---------------------------------------------------- | ---- | ---------- |
-| Duplicate `has_mobile_app_tracking` column in CSV   | all  | High       |
-| `pnl` inconsistent with `book_price - source_price` | 24   | High       |
-| `delivered_at` before `pickup_at`                     | 467  | High       |
-| Duplicate `loadsmart_id` (identical rows)           | 8    | Medium     |
-| Null `carrier_name` (mostly cancelled)              | 499  | Medium     |
-| `mileage = 0` on non-cancelled loads                | 45   | Medium     |
+| Finding                                             | Rows | Severity |
+| --------------------------------------------------- | ---- | -------- |
+| Duplicate `has_mobile_app_tracking` column in CSV   | all  | High     |
+| `pnl` inconsistent with `book_price - source_price` | 24   | High     |
+| `delivered_at` before `pickup_at`                   | 467  | High     |
+| Duplicate `loadsmart_id` (identical rows)           | 8    | Medium   |
+| Null `carrier_name` (mostly cancelled)              | 499  | Medium   |
+| `mileage = 0` on non-cancelled loads                | 45   | Medium   |
 
 
 dbt tests are set to `warn` (non-blocking) for known findings so the pipeline can run
@@ -495,3 +457,4 @@ while issues are investigated.
 make teardown    # stop and remove containers, volumes, and local images
 make reset       # teardown + full setup (useful for a clean slate)
 ```
+

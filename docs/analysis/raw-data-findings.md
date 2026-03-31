@@ -28,9 +28,9 @@ The CSV contains this column **twice** with the exact same name. Pandas auto-ren
 | 206586825    | Sapulpa,OK -> Warner Robins,GA | False              |
 
 
-All pairs are **fully identical rows** — not updates or different versions of the same shipment. They look like accidental duplicate ingestion at the source.
+All pairs are **identical rows** — not updates or different versions of the same shipment. They look like accidental duplicate ingestion at the source.
 
-**Suggestion:** Add a uniqueness constraint at the source. In the current pipeline, the intermediate layer applies `DISTINCT` to deduplicate before feeding the mart.
+**To do:** Add a uniqueness constraint at the source. And qualify in staging to remove the duplicates.
 
 ---
 
@@ -38,7 +38,7 @@ All pairs are **fully identical rows** — not updates or different versions of 
 
 **Impact:** 499 rows (9.31% of total)
 
-Most records without carrier_name are cancelled loads (`load_was_cancelled = TRUE`). That is semantically coherent: if the load was cancelled before a carrier was assigned, there is no name to record.
+Most records without carrier_name are cancelled loads (`load_was_cancelled = TRUE`). That is coherent: if the load was cancelled before a carrier was assigned, there is no name to record.
 
 
 | Situation                             | Rows          |
@@ -48,7 +48,7 @@ Most records without carrier_name are cancelled loads (`load_was_cancelled = TRU
 | Not cancelled with null carrier_name | ~19             |
 
 
-**Suggestion:** For non-cancelled loads without carrier_name, investigate TMS integration failures. Consider a `dim_carrier` dimension with a default `"Unknown"` member to preserve referential integrity in the mart.
+**To do:** Check if this logic is right and if it makes sense to have a `dim_carrier` dimension with a default `"Unknown"` member to preserve referential integrity in the mart.
 
 ---
 
@@ -68,9 +68,9 @@ Most records without carrier_name are cancelled loads (`load_was_cancelled = TRU
 | False              | 4,844  | 16                        |
 
 
-The vast majority of zeros are on cancelled loads. For cancelled loads, zero prices are semantically valid (no service executed). The **16 non-cancelled rows with book_price = 0** are potentially problematic.
+The majority of zeros are on cancelled loads. For cancelled loads, zero prices are semantically valid (no service executed). The **16 non-cancelled rows with book_price = 0** are potentially problematic.
 
-**Suggestion:** Investigate the 16 active loads with zero price — may be tests, courtesy loads, or registration errors. Consider excluding them from financial analyses.
+**To do:** Investigate the 16 active loads with zero price — may be tests, courtesy loads, or registration errors. Consider excluding them from financial analyses.
 
 ---
 
@@ -104,11 +104,11 @@ In all **24** cases, **`source_price = 0` but `book_price > 0`**, and the record
 
 The 45 non-cancelled loads with zero mileage are suspicious. Verified examples have long real lanes (e.g. `Maxton,NC -> Portland,OR`, `Lakewood,NY -> Portland,OR`) — routes that clearly should have mileage > 0.
 
-**Suggestion:** This is likely an integration error with the distance engine. Exclude those 45 rows from cost-per-mile analysis. Consider adding an `is_mileage_valid` flag in the mart.
+**Suggestion:** This is likely an integration error with the distance engine. Exclude those 45 rows from cost-per-mile analysis. Check problems with product / engineering team. 
 
 ---
 
-## 7. `carrier_rating` very sparse
+## 7. `carrier_rating` with no value
 
 **Impact:** 4,614 of 5,361 rows with no value (86.1% null)
 
@@ -122,7 +122,7 @@ The 45 non-cancelled loads with zero mileage are suspicious. Verified examples h
 
 Only 13.9% of loads have a rating. That makes the column unusable for population-level analysis without explicit segmentation.
 
-**Suggestion:** Check whether rating is only filled for carriers in a certain program or after a given date. Do not use `AVG(carrier_rating)` without filtering nulls — the mean would be heavily selection-biased.
+**Todo:** Understand better the business logic behind the carrier rating and how it is used.
 
 ---
 
@@ -144,7 +144,7 @@ Only 13.9% of loads have a rating. That makes the column unusable for population
 | livejobs             | 1      |
 
 
-**Suggestion:** Check whether null `sourcing_channel` means a specific channel (e.g. direct, contracted) or a logging failure. Consider mapping NULL to `"direct"` or `"unknown"` so sourcing analyses are not distorted.
+**Suggestion:** Check whether null `sourcing_channel` means a specific channel or a logging failure. Consider mapping NULL to `"direct"` or `"unknown"` so sourcing analyses are not distorted.
 
 ---
 
