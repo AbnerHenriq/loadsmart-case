@@ -7,11 +7,17 @@
 | ----------------- | --------------------- |
 | Data warehouse    | DuckDB (local file)   |
 | Transformation    | dbt-core + dbt-duckdb |
-| Orchestration     | Apache Airflow 2.9    |
+| Orchestration     | Apache Airflow        |
 | Visualization     | Apache Superset       |
 | Analysis / export | Jupyter Notebook      |
 | Infrastructure    | Docker Compose        |
 
+
+---
+
+## Documentation hub
+
+- **Notion — AgreementsDad Hub:** [how I organize ERDs, TDD, and runbooks](https://www.notion.so/Agreements-Hub-333381e3f0e880179e18e1dcf8fbc837) for this kind of project.
 
 ---
 
@@ -80,13 +86,35 @@ make setup
 
 You can edit `.env` later to rotate secrets or to enable SMTP for the monthly export (see [Monthly export by email](#monthly-export-by-email)). The values in `.env.example` are enough for a first local run.
 
-`make setup` starts all containers, runs the data pipeline (ingest → dbt run → dbt test -> send to email), and configures Superset automatically. When it finishes, open:
+`make setup` starts all containers, triggers the Airflow DAG (see below), waits for it to finish, runs Superset bootstrap, and opens the UIs. When it finishes, open:
 
 - **Superset:** [http://localhost:8088](http://localhost:8088) — login `admin` / `admin`
 - **Airflow:** [http://localhost:9090](http://localhost:9090) — login `admin` / `admin`
 
-Superset comes up with 6 dashboards, 48 metrics, and the DuckDB connection wired.
-                                                                      |
+Superset comes up with 5 dashboards, 48 metrics, and the DuckDB connection wired.
+
+## Airflow — `loadsmart_pipeline` DAG
+
+The orchestration lives in `[airflow/dags/loadsmart_pipeline.py](airflow/dags/loadsmart_pipeline.py)`.
+
+- **DAG ID:** `loadsmart_pipeline`
+- **Schedule:** `None` (`schedule=None`) — **manual trigger only** (Airflow UI, REST API, or the first `make setup`, which unpause/triggers the DAG via the Airflow API).
+- **DuckDB:** host file `data/loadsmart.duckdb`, mounted at `/opt/airflow/data/loadsmart.duckdb` in Airflow containers.
+
+**Task flow (linear):**
+
+```
+ingest_csv → dbt_run → dbt_test → export_last_month
+```
+
+
+| Task                | Operator         | What it does                                                                                                                                                                                            |
+| ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ingest_csv`        | `PythonOperator` | Calls `scripts/ingest.py`: loads `2026_data_challenge_ae_data.csv` into DuckDB `raw.shipments`.                                                                                                         |
+| `dbt_run`           | `BashOperator`   | Runs `dbt run` (`--project-dir` / `--profiles-dir` under `/opt/airflow/dbt`, target `dev`) — builds staging → intermediate → mart.                                                                      |
+| `dbt_test`          | `BashOperator`   | Runs `dbt test` on the same project (tests may **warn** on known data-quality cases; they do not block the DAG).                                                                                        |
+| `export_last_month` | `PythonOperator` | Calls `scripts/export_last_month.py`: writes `data/exports/deliveries_YYYY_MM.csv`. Sends email **only if** SMTP variables are set in `.env` (see [Monthly export by email](#monthly-export-by-email)). |
+
 
 ### Other commands
 
