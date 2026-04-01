@@ -23,7 +23,7 @@
 
 ## Prerequisites
 
-- Docker Desktop (with Docker Compose v2)
+- Docker Desktop (with Docker Compose v2). It must be installed and running / opened.
 - Python 3.11+ (to run dbt locally, optional)
 - Git
 
@@ -482,7 +482,6 @@ while issues are investigated.
 ## Stop and reset the environment
 
 ```bash
-make teardown    # stop and remove containers, volumes, and local images
 make reset       # teardown + full setup (useful for a clean slate)
 ```
 

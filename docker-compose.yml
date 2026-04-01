@@ -132,12 +132,17 @@ services:
       SUPERSET_USERNAME: admin
       SUPERSET_PASSWORD: admin
       DUCKDB_PATH: /opt/airflow/data/loadsmart.duckdb
+      AIRFLOW_WEBSERVER_INTERNAL: http://airflow-webserver:8080
+      AIRFLOW_USER: admin
+      AIRFLOW_PASS: admin
     volumes:
       - ./scripts:/scripts
       - ./data:/opt/airflow/data
     command: ["python", "/scripts/superset_bootstrap.py"]
     depends_on:
       superset:
+        condition: service_healthy
+      airflow-webserver:
         condition: service_healthy
     restart: on-failure
 

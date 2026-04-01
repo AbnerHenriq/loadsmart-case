@@ -1,14 +1,3 @@
-"""
-Ingest the raw CSV into DuckDB raw.shipments.
-
-Usage:
-    python scripts/ingest.py [--csv-path PATH] [--db-path PATH]
-
-Defaults read from env vars:
-    CSV_PATH  → data/2026_data_challenge_ae_data.csv
-    DUCKDB_PATH → data/loadsmart.duckdb
-"""
-
 import os
 import argparse
 import duckdb

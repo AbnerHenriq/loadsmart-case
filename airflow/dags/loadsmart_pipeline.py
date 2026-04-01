@@ -3,7 +3,7 @@ loadsmart_pipeline
 ──────────────────
 Orchestrates the full Loadsmart data pipeline:
 
-  ingest_csv  →  dbt_run  →  dbt_test  →  export_last_month
+  ingest_csv  →  dbt_deps  →  dbt_run  →  dbt_test  →  export_last_month
 
 Schedule: manual trigger only.
 Trigger via the Airflow UI or:
@@ -16,7 +16,6 @@ environment variables are set in .env — sends it by e-mail.
 from __future__ import annotations
 
 import os
-import subprocess
 from datetime import datetime
 
 from airflow import DAG
@@ -35,7 +34,7 @@ default_args = {
 
 with DAG(
     dag_id="loadsmart_pipeline",
-    description="Ingest CSV → dbt run → dbt test (DuckDB)",
+    description="Ingest CSV → dbt deps → dbt run → dbt test (DuckDB)",
     schedule=None,           # manual trigger only
     start_date=datetime(2024, 1, 1),
     catchup=False,
@@ -53,6 +52,16 @@ with DAG(
     ingest_csv = PythonOperator(
         task_id="ingest_csv",
         python_callable=run_ingest,
+    )
+
+    dbt_deps = BashOperator(
+        task_id="dbt_deps",
+        bash_command=(
+            f"dbt deps "
+            f"--project-dir {DBT_PROJECT_DIR} "
+            f"--profiles-dir {DBT_PROFILES_DIR}"
+        ),
+        env={**os.environ, "DUCKDB_PATH": DUCKDB_PATH},
     )
 
     dbt_run = BashOperator(
@@ -91,4 +100,4 @@ with DAG(
         python_callable=run_export,
     )
 
-    ingest_csv >> dbt_run >> dbt_test >> export_last_month
+    ingest_csv >> dbt_deps >> dbt_run >> dbt_test >> export_last_month

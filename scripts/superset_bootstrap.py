@@ -18,6 +18,11 @@ Environment variables (all optional):
     SUPERSET_USERNAME  default: admin
     SUPERSET_PASSWORD  default: admin
     DUCKDB_PATH        default: /opt/airflow/data/loadsmart.duckdb
+
+If AIRFLOW_WEBSERVER_INTERNAL is set (e.g. http://airflow-webserver:8080 in Docker),
+the bootstrap waits for the latest loadsmart_pipeline DAG run to succeed via the
+Airflow REST API instead of opening DuckDB (avoids file-lock races on bind mounts).
+Use AIRFLOW_USER / AIRFLOW_PASS (or AIRFLOW_API_USER / AIRFLOW_API_PASSWORD) for basic auth.
 """
 
 import json
@@ -96,6 +101,63 @@ def wait_for_duckdb(timeout: int = 600):
     print(
         "  ✗ dbt models not found after timeout.\n"
         "    Open Airflow (localhost:9090) and run the 'loadsmart_pipeline' DAG.\n"
+        "    This service will retry automatically.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+def wait_for_airflow_pipeline(timeout: int = 900):
+    """
+    Poll Airflow REST API until the latest dag_run of loadsmart_pipeline is success.
+    Avoids opening DuckDB while ingest/dbt hold locks (e.g. Docker Desktop + macOS).
+    """
+    base = os.getenv("AIRFLOW_WEBSERVER_INTERNAL", "").strip().rstrip("/")
+    if not base:
+        return
+
+    user = os.getenv("AIRFLOW_API_USER", os.getenv("AIRFLOW_USER", "admin"))
+    password = os.getenv("AIRFLOW_API_PASSWORD", os.getenv("AIRFLOW_PASS", "admin"))
+    dag_id = os.getenv("AIRFLOW_DAG_ID", "loadsmart_pipeline")
+    url = f"{base}/api/v1/dags/{dag_id}/dagRuns"
+
+    print(f"Waiting for Airflow DAG {dag_id!r} (latest run = success) at {base} ...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            r = requests.get(
+                url,
+                params={"order_by": "-start_date", "limit": 1},
+                auth=(user, password),
+                timeout=30,
+            )
+            r.raise_for_status()
+            runs = r.json().get("dag_runs") or []
+            if not runs:
+                print("  ... no dag runs yet, waiting 15s")
+                time.sleep(15)
+                continue
+            state = runs[0].get("state")
+            run_id = runs[0].get("dag_run_id", "?")
+            if state == "success":
+                print(f"  ✓ pipeline succeeded (run_id={run_id})\n")
+                return
+            if state == "failed":
+                print(
+                    "  ✗ latest DAG run failed — fix the pipeline and re-run.\n"
+                    "    This service will retry automatically.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            print(f"  ... dag run state={state!r} (run_id={run_id}), waiting 15s")
+            time.sleep(15)
+        except requests.RequestException as e:
+            print(f"  ... Airflow API unreachable ({e}), waiting 15s")
+            time.sleep(15)
+
+    print(
+        "  ✗ timeout waiting for successful DAG run.\n"
+        "    Open Airflow and run loadsmart_pipeline.\n"
         "    This service will retry automatically.",
         file=sys.stderr,
     )
@@ -459,7 +521,10 @@ def main():
     print("=" * 50)
 
     wait_for_superset()
-    wait_for_duckdb()
+    if os.getenv("AIRFLOW_WEBSERVER_INTERNAL", "").strip():
+        wait_for_airflow_pipeline()
+    else:
+        wait_for_duckdb()
     session = get_session()
 
     db_id = setup_connection(session)

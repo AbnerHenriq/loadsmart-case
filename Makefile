@@ -91,7 +91,7 @@ trigger-pipeline:
 
 .PHONY: wait-pipeline
 wait-pipeline:
-	@echo "→ Waiting for pipeline (ingest → dbt run → dbt test → export_last_month)..."
+	@echo "→ Waiting for pipeline (ingest → dbt deps → dbt run → dbt test → export_last_month)..."
 	@elapsed=0; \
 	while true; do \
 		response=$$(curl -s -u "$(AIRFLOW_USER):$(AIRFLOW_PASS)" \
