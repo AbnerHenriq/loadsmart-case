@@ -17,7 +17,7 @@
 
 ## Documentation hub
 
-- **Notion — AgreementsDad Hub:** [how I organize ERDs, TDD, and runbooks](https://www.notion.so/Agreements-Hub-333381e3f0e880179e18e1dcf8fbc837) for this kind of project.
+- **Notion — Documentation Hub:** [how I organize Semantic Layer, Docs, PRD, TDD, and runbooks](https://www.notion.so/LoadSmart-Analytics-Hub-333381e3f0e880ce81f4e98fafd4c9ba?source=copy_link) for this kind of project.
 
 ---
 
